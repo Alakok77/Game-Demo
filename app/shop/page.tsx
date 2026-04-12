@@ -261,7 +261,7 @@ export default function ShopPage() {
       <div className="mx-auto w-full max-w-6xl flex-1 flex flex-col min-h-0 relative pb-4">
         <Navigation />
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* ── Header Mobile-First ── */}
           <div className="mb-2 mt-1 md:mb-6 rounded-xl md:rounded-2xl bg-slate-900 border border-slate-800 p-2 sm:p-4 shadow-md flex flex-row items-center justify-between gap-2 flex-shrink-0">
           <div className="flex-1 min-w-0">
@@ -358,7 +358,7 @@ export default function ShopPage() {
           </div>
 
           {/* ── Main Shop Grid ── */}
-          <div className="mt-2 px-1">
+          <div className="flex-1 overflow-y-auto custom-scrollbar mt-2 px-1 pb-16">
             <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4">
               {filteredCards.map((card) => {
                 const isOwned = ownedIds.includes(card.templateId);
