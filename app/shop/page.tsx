@@ -105,7 +105,7 @@ const CardVisualizer = ({
     <motion.div 
       layout
       whileHover={!isOwned ? { scale: 0.98, y: -4 } : {}}
-      className={`group relative flex flex-col rounded-2xl border p-4 transition-all overflow-hidden ${bgClass}`}
+      className={`group relative flex flex-col rounded-xl sm:rounded-2xl border p-2.5 sm:p-4 transition-all overflow-hidden ${bgClass}`}
     >
       {shimmer && !isOwned && (
         <div className="pointer-events-none absolute inset-0 -translate-x-[150%] animate-[shimmer_3s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
@@ -129,18 +129,18 @@ const CardVisualizer = ({
       </div>
 
       {/* Structural Ability Block */}
-      <div className="flex-1 bg-black/20 rounded-xl p-3 border border-white/5 flex flex-col gap-2 z-10 mb-4 h-[110px] overflow-hidden group-hover:overflow-y-auto custom-scrollbar">
+      <div className="flex-1 bg-black/20 rounded-xl p-2 sm:p-3 border border-white/5 flex flex-col gap-1 sm:gap-2 z-10 mb-2 sm:mb-4 sm:h-[110px] overflow-hidden group-hover:overflow-y-auto custom-scrollbar">
         {parsed.effect && (
-          <div className="text-xs text-slate-200"><span className="text-indigo-300 font-bold mr-1">⚡ เอฟเฟกต์:</span>{parsed.effect}</div>
+          <div className="text-[9px] sm:text-xs text-slate-200"><span className="text-indigo-300 font-bold mr-1">⚡</span>{parsed.effect}</div>
         )}
         {parsed.condition && (
-          <div className="text-xs text-slate-300"><span className="text-amber-300 font-bold mr-1">⚠️ เงื่อนไข:</span>{parsed.condition}</div>
+          <div className="text-[9px] sm:text-xs text-slate-300"><span className="text-amber-300 font-bold mr-1">⚠️</span>{parsed.condition}</div>
         )}
         {parsed.result && (
-          <div className="text-xs text-emerald-200 font-medium"><span className="text-emerald-400 font-bold mr-1">✨ ผลลัพธ์:</span>{parsed.result}</div>
+          <div className="text-[9px] sm:text-xs text-emerald-200 font-medium"><span className="text-emerald-400 font-bold mr-1">✨</span>{parsed.result}</div>
         )}
         {!parsed.effect && !parsed.condition && !parsed.result && (
-          <div className="text-xs text-slate-400 italic">ไม่มีความสามารถพิเศษ</div>
+          <div className="text-[9px] sm:text-xs text-slate-400 italic">ไม่มีความสามารถพิเศษ</div>
         )}
       </div>
 
@@ -152,24 +152,24 @@ const CardVisualizer = ({
         
         {isOwned ? (
           <div className="flex flex-col items-end">
-            <span className="text-xs font-bold text-emerald-400 mb-0.5">✅ ปลดล็อกแล้ว</span>
-            <span className="text-[9px] text-emerald-500/70">จัดเด็คได้สูงสุด {maxCopies} ใบ</span>
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-400 mb-0.5">✅ มีแล้ว</span>
+            <span className="text-[8px] sm:text-[9px] text-emerald-500/70">ใส่เด็คได้ {maxCopies} ใบ</span>
           </div>
         ) : (
           <motion.button
             whileTap={canAfford ? { scale: 0.9, y: 2 } : {}}
             onClick={handleBuy}
             disabled={!canAfford}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg ${
+            className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 shadow-lg ${
               canAfford 
                 ? "bg-slate-100 text-slate-900 hover:bg-white ring-2 ring-transparent hover:ring-indigo-400/50" 
                 : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700 shadow-none"
             }`}
           >
             {canAfford ? (
-              <>กดซื้อ <span className="bg-slate-200 px-1.5 py-0.5 rounded-md text-[10px] text-slate-800 flex items-center">{price} 🪙</span></>
+               <>ซื้อ <span className="bg-slate-200 px-1 py-0.5 rounded-md text-[9px] sm:text-[10px] text-slate-800 flex items-center leading-none">{price} 🪙</span></>
             ) : (
-              <>แพงไป <span className="opacity-50">({price} 🪙)</span></>
+               <>ขาดเงิน <span className="opacity-50">({price}🪙)</span></>
             )}
           </motion.button>
         )}
@@ -263,21 +263,34 @@ export default function ShopPage() {
 
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
           {/* ── Header Mobile-First ── */}
-          <div className="mb-4 mt-2 md:mb-6 rounded-2xl bg-slate-900 border border-slate-800 p-4 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-indigo-300 to-purple-400 bg-clip-text text-transparent">🛒 พ่อค้าพเนจร</h1>
-            <p className="text-xs md:text-sm text-slate-500 mt-1">แลกเปลี่ยนเหรียญทองแดงเพื่อครอบครองพลังแห่งทวยเทพ</p>
+          <div className="mb-2 mt-1 md:mb-6 rounded-xl md:rounded-2xl bg-slate-900 border border-slate-800 p-2 sm:p-4 shadow-md flex flex-row items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg md:text-3xl font-black bg-gradient-to-r from-indigo-300 to-purple-400 bg-clip-text text-transparent truncate">🛒 พ่อค้าพเนจร</h1>
+              {/* Inline Pack Button to save vertical space on mobile */}
+              <button
+                onClick={handleBuyPack}
+                disabled={isRolling || profile.coins < 300}
+                className="flex sm:hidden items-center gap-1 rounded-lg bg-gradient-to-r from-purple-700 to-indigo-700 px-2 py-1 font-bold text-white active:scale-95 transition-all text-[9px]"
+              >
+                <span>📦 สุ่ม</span>
+                <span className="bg-black/30 px-1 rounded flex items-center text-[8px]">
+                  300🪙
+                </span>
+              </button>
+            </div>
+            <p className="hidden sm:block text-xs md:text-sm text-slate-500 mt-1">แลกเปลี่ยนเหรียญทองแดงเพื่อครอบครองพลังแห่งทวยเทพ</p>
           </div>
           
-          <div className="flex items-center gap-3 self-end md:self-auto">
+          <div className="flex items-center gap-1.5 shrink-0">
             {canClaimDaily && (
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleClaimDaily}
-                className="rounded-xl bg-yellow-500/10 px-3 py-2 text-xs md:text-sm font-bold text-yellow-400 ring-1 ring-yellow-500/50 hover:bg-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.15)] flex items-center gap-1"
+                className="rounded-lg bg-yellow-500/10 px-2 py-1.5 text-[10px] md:text-sm font-bold text-yellow-400 ring-1 ring-yellow-500/50 hover:bg-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.15)] flex items-center gap-1"
               >
-                <span>🎁</span> <span className="hidden md:inline">รับเงินฟรี</span> +200 🪙
+                <span>🎁</span> <span className="hidden md:inline">รับเงินฟรี</span> +200 <span className="hidden sm:inline">🪙</span>
               </motion.button>
             )}
             <div className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 ring-1 ring-yellow-500/40 shadow-inner">
@@ -306,13 +319,13 @@ export default function ShopPage() {
                   <button
                     key={f.id}
                     onClick={() => setFilter(f.id as any)}
-                    className={`rounded-2xl px-4 py-3 text-sm md:text-base font-bold transition-all flex items-center gap-2 ${
+                    className={`rounded-xl px-2.5 py-1.5 text-[10px] md:text-base font-bold transition-all flex items-center gap-1 shrink-0 ${
                       filter === f.id
-                        ? "bg-slate-800 text-white shadow-lg ring-1 ring-white/10"
+                        ? "bg-slate-800 text-white shadow-md ring-1 ring-white/10"
                         : "bg-slate-900/50 text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"
                     }`}
                   >
-                    <span className="text-lg">{f.icon}</span>
+                    <span className="text-xs sm:text-lg">{f.icon}</span>
                     <span className={filter === f.id ? "text-white" : f.color}>{f.label}</span>
                   </button>
                 ))}
@@ -344,24 +357,9 @@ export default function ShopPage() {
             </motion.div>
           </div>
 
-          {/* Mobile Pack Banner (Visible only on very small screens if needed, otherwise hidden to save space, but let's just make it block sm:flex anyway) */}
-          <button
-              onClick={handleBuyPack}
-              disabled={isRolling || profile.coins < 300}
-              className="sm:hidden w-full flex items-center justify-between rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 px-5 py-4 font-bold text-white active:scale-95 transition-all shadow-lg border border-purple-500/50"
-            >
-              <span className="text-base flex items-center gap-2">📦 เปิดแพ็คเกลือ</span>
-              <span className="bg-black/30 px-3 py-1 rounded-lg text-sm flex items-center gap-1">
-                300 <span className="text-[10px]">🪙</span>
-              </span>
-          </button>
-
           {/* ── Main Shop Grid ── */}
-          <div className="mt-4 px-1">
-            <div className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
-              พบ {filteredCards.length} ใบ
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
+          <div className="mt-2 px-1">
+            <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4">
               {filteredCards.map((card) => {
                 const isOwned = ownedIds.includes(card.templateId);
                 const price = getCardPrice(card.tier, card.unlockLevel);
