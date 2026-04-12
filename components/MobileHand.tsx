@@ -6,7 +6,7 @@ import type { Card as CardT, Faction } from "@/game/types";
 import { MobileCardModal } from "./MobileCardModal";
 import { useGameStore } from "@/store/gameStore";
 
-// ─── Mini card thumbnail for the hand strip ───────────────────────────────────
+// ─── Giant thumb-friendly mobile card ─────────────────────────────────────────
 
 function MiniCard({
   card,
@@ -16,7 +16,7 @@ function MiniCard({
   cheapestPlayable,
   disabled,
   onTap,
-  onLongPress,
+  onInfo,
 }: {
   card: CardT;
   faction: Faction;
@@ -25,76 +25,56 @@ function MiniCard({
   cheapestPlayable: boolean;
   disabled: boolean;
   onTap: () => void;
-  onLongPress: () => void;
+  onInfo: () => void;
 }) {
-  // Long-press detection
-  const pressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const didLongPress = React.useRef(false);
-
-  function handleTouchStart() {
-    didLongPress.current = false;
-    pressTimer.current = setTimeout(() => {
-      didLongPress.current = true;
-      onLongPress();
-    }, 420);
-  }
-
-  function handleTouchEnd() {
-    if (pressTimer.current) clearTimeout(pressTimer.current);
-    if (!didLongPress.current) onTap();
-  }
-
-  function handleTouchMove() {
-    if (pressTimer.current) clearTimeout(pressTimer.current);
-  }
-
-  // Tier colours
   const tierBg =
     card.tier === "legendary"
       ? faction === "RAMA"
-        ? "bg-gradient-to-b from-indigo-950 via-purple-950 to-slate-950"
-        : "bg-gradient-to-b from-red-950 via-purple-950 to-slate-950"
+        ? "bg-gradient-to-b from-indigo-950 via-purple-900 to-slate-950"
+        : "bg-gradient-to-b from-red-950 via-purple-900 to-slate-950"
       : card.tier === "hero"
       ? faction === "RAMA"
-        ? "bg-gradient-to-b from-blue-950 via-slate-900 to-slate-950"
-        : "bg-gradient-to-b from-red-950 via-slate-900 to-slate-950"
+        ? "bg-gradient-to-b from-blue-950 via-slate-800 to-slate-950"
+        : "bg-gradient-to-b from-red-950 via-slate-800 to-slate-950"
       : "bg-gradient-to-b from-slate-800 to-slate-950";
 
   const border = selected
-    ? "border-yellow-400 shadow-[0_0_18px_rgba(250,204,21,0.65)] ring-2 ring-yellow-400"
+    ? "border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400"
     : cheapestPlayable
-    ? "border-yellow-400/80 shadow-[0_0_12px_rgba(250,204,21,0.45)]"
+    ? "border-yellow-500/80 shadow-[0_0_12px_rgba(250,204,21,0.3)]"
     : playable
-    ? "border-green-400/60 shadow-[0_0_10px_rgba(52,211,153,0.35)]"
-    : "border-slate-600/50";
+    ? "border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+    : "border-slate-700/60";
 
-  const opacity = disabled && !selected ? "opacity-40" : "";
+  const opacity = disabled && !selected ? "opacity-50" : "";
 
   const costColor = faction === "RAMA"
     ? "bg-gradient-to-br from-yellow-400 to-amber-600 border-yellow-400"
     : "bg-gradient-to-br from-red-500 to-rose-700 border-red-400";
 
-  // Top stripe colour
   const stripe =
     card.tier === "legendary"
-      ? "from-purple-500 via-violet-400 to-purple-600"
+      ? "from-purple-400 via-violet-300 to-purple-500"
       : faction === "RAMA"
-      ? "from-blue-500 via-indigo-400 to-blue-600"
-      : "from-red-500 via-rose-400 to-red-600";
+      ? "from-blue-400 via-cyan-300 to-blue-500"
+      : "from-red-400 via-rose-300 to-red-500";
+
+  // Prevent parent click when clicking info button
+  const handleInfoClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    onInfo();
+  };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, scale: 0.85 }}
-      animate={{ opacity: 1, y: selected ? -8 : 0, scale: selected ? 1.06 : 1 }}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, y: selected ? -10 : 0, scale: selected ? 1.05 : 1 }}
       exit={{ opacity: 0, scale: 0.7 }}
-      transition={{ duration: 0.18 }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={handleTouchMove}
-      onClick={() => { if (!('ontouchstart' in window)) onTap(); }}
+      transition={{ duration: 0.2 }}
+      onClick={() => onTap()}
       className={[
-        "relative flex-shrink-0 w-[80px] h-[110px] rounded-xl border-2 overflow-hidden cursor-pointer select-none",
-        "transition-transform duration-150 active:scale-95",
+        "relative flex-shrink-0 w-[110px] h-[145px] rounded-2xl border-[3px] overflow-hidden cursor-pointer select-none",
+        "transition-transform active:scale-95",
         tierBg,
         border,
         opacity,
@@ -103,37 +83,48 @@ function MiniCard({
       style={{ touchAction: "manipulation" }}
     >
       {/* Stripe */}
-      <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${stripe}`} />
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${stripe}`} />
 
       {/* Selected badge */}
       {selected && (
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-yellow-400 px-1.5 py-0.5 text-[8px] font-black text-slate-900 leading-none z-10">
-          ✔
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-yellow-400 px-2 py-0.5 text-[9px] font-black text-slate-900 leading-none z-10 shadow-md">
+          ✔ กำลังเลือก
         </div>
       )}
 
       {/* Cost gem */}
-      <div className={`absolute top-2 right-1.5 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-black text-white ${costColor}`}>
+      <div className={`absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black text-white shadow-xl ${costColor}`}>
         {card.cost}
       </div>
 
-      {/* Icon */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 pt-2">
-        <div className="text-2xl leading-none drop-shadow-lg">{card.icon ?? "🃏"}</div>
-        <div className="mt-1 w-full px-1 text-center text-[9px] font-bold text-white line-clamp-2 leading-tight">
+      {/* Info Button - Huge tap target! */}
+      <div 
+        onClick={handleInfoClick}
+        onTouchEnd={handleInfoClick}
+        className="absolute top-1 left-1.5 p-2 bg-black/40 hover:bg-black/60 rounded-full z-20 backdrop-blur-sm"
+      >
+        <span className="text-white text-[12px] leading-none block font-mono">ℹ️</span>
+      </div>
+
+      {/* Icon & Label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pt-4 pointer-events-none">
+        <div className="text-4xl drop-shadow-xl">{card.icon ?? "🃏"}</div>
+        <div className="w-full px-2 mt-2 text-center text-[11px] font-extrabold text-white leading-tight drop-shadow-md">
           {card.name}
         </div>
+        
+        {/* Tier text strictly for hero/leg */}
+        {card.tier !== "basic" && (
+          <div className="px-2 py-0.5 mt-1 rounded bg-black/50 text-[8px] font-bold text-slate-300">
+            {card.tier === "legendary" ? "✨ LEGENDARY" : "⚔️ HERO"}
+          </div>
+        )}
       </div>
 
       {/* Playable pulse */}
       {cheapestPlayable && !selected && (
-        <div className="pointer-events-none absolute inset-0 rounded-xl bg-yellow-400/10 animate-playable-pulse" />
+        <div className="pointer-events-none absolute inset-0 rounded-xl bg-yellow-400/10 animate-pulse" />
       )}
-
-      {/* Info hint */}
-      <div className="absolute bottom-1 right-1 text-[8px] text-slate-500 leading-none select-none">
-        ℹ
-      </div>
     </motion.div>
   );
 }
@@ -162,15 +153,10 @@ export function MobileHand() {
     selectCard(selectedCardId === card.id ? undefined : card.id);
   }
 
-  function handleLongPress(card: CardT) {
-    setModalCard(card);
-  }
-
   return (
     <>
-      {/* Hand strip */}
       <div
-        className="flex items-center gap-2 overflow-x-auto px-3 py-2 h-full"
+        className="flex items-center gap-3 overflow-x-auto px-4 py-3 h-[165px]"
         style={{
           overscrollBehaviorX: "contain",
           WebkitOverflowScrolling: "touch",
@@ -185,7 +171,7 @@ export function MobileHand() {
             const isDisabled       = !canPlay || card.cost > human.energy;
 
             return (
-              <div key={card.id} style={{ scrollSnapAlign: "start" }}>
+              <div key={card.id} style={{ scrollSnapAlign: "center" }}>
                 <MiniCard
                   card={card}
                   faction={human.faction}
@@ -194,7 +180,7 @@ export function MobileHand() {
                   cheapestPlayable={isCheapest}
                   disabled={isDisabled}
                   onTap={() => handleTap(card)}
-                  onLongPress={() => handleLongPress(card)}
+                  onInfo={() => setModalCard(card)}
                 />
               </div>
             );
@@ -202,8 +188,8 @@ export function MobileHand() {
         </AnimatePresence>
 
         {human.hand.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-xs text-slate-600 font-semibold">
-            ไม่มีการ์ดในมือ
+          <div className="flex-1 flex items-center justify-center text-sm text-slate-500 font-bold bg-slate-900/50 rounded-2xl h-full border border-dashed border-slate-700">
+            ไม่มีการ์ดในมือแล้ว! 🃏
           </div>
         )}
       </div>

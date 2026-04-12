@@ -8,7 +8,7 @@ import { MobileHand } from "@/components/MobileHand";
 import { useGameStore } from "@/store/gameStore";
 import { humanPlayerLabel, aiPlayerLabel } from "@/lib/factionUi";
 
-// ─── Compact contextual hint ──────────────────────────────────────────────────
+// ─── Compact contextual hint (Floating) ───────────────────────────────────────
 
 function MobileHint({
   isMyTurn,
@@ -21,8 +21,8 @@ function MobileHint({
 }) {
   const hint = (() => {
     if (!isMyTurn) return null;
-    if (!hasCardSelected) return { text: "กดค้างการ์ดเพื่อดูรายละเอียด · แตะเพื่อเลือก", icon: "👇" };
-    return { text: "แตะช่องสีเขียวบนกระดานเพื่อวาง", icon: "🎯" };
+    if (!hasCardSelected) return { text: "แตะค้างดูข้อมูล · แตะใช้การ์ด 👇", icon: "" };
+    return { text: "แตะช่องสีเขียวบนกระดาน 🎯", icon: "" };
   })();
 
   return (
@@ -30,17 +30,16 @@ function MobileHint({
       {hint && (
         <motion.div
           key={hint.text}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
+          initial={{ opacity: 0, scale: 0.9, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="flex items-center gap-1.5 rounded-full bg-slate-900/90 border border-slate-700/70 px-3 py-1.5 text-[11px] font-semibold text-slate-300 shadow-lg backdrop-blur-sm whitespace-nowrap mx-auto w-fit"
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-indigo-950/95 border border-indigo-500/50 px-4 py-1.5 text-xs font-bold text-indigo-200 shadow-xl backdrop-blur-md whitespace-nowrap z-30"
         >
-          <span>{hint.icon}</span>
           <span>{hint.text}</span>
           {cardsLeft > 0 && (
-            <span className="ml-1 rounded-full bg-slate-700 px-1.5 py-0.5 text-[9px] text-slate-400">
-              เหลือได้อีก {cardsLeft} ใบ
+            <span className="ml-1 rounded-full bg-indigo-900 px-1.5 py-0.5 text-[10px] text-indigo-300">
+              เหลือ {cardsLeft} ใบ
             </span>
           )}
         </motion.div>
@@ -76,18 +75,15 @@ export function MobileGameLayout() {
   const aiTotal    = scores.total[ai.faction] ?? 0;
   const leading    = humanTotal > aiTotal ? "HUMAN" : humanTotal < aiTotal ? "AI" : "TIED";
 
-  // Lock body scroll while this layout is mounted
+  // Lock body scroll
   React.useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Faction colour helpers
   const humanColor = human.faction === "RAMA" ? "text-blue-300" : "text-red-300";
   const aiColor    = ai.faction === "LANKA"   ? "text-red-400"  : "text-blue-300";
-  const humanDot   = human.faction === "RAMA" ? "bg-blue-400"   : "bg-red-500";
-  const aiDot      = ai.faction === "LANKA"   ? "bg-red-500"    : "bg-blue-400";
 
   return (
     <div
@@ -97,184 +93,144 @@ export function MobileGameLayout() {
         overflow: "hidden",
       }}
     >
-      {/* ══ 1. HEADER ═══════════════════════════════════════════════════════════ */}
-      <header className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900/90 z-20 flex-shrink-0">
-        {/* Human */}
-        <div className="flex items-center gap-1.5">
-          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${humanDot}`} />
-          <div>
-            <div className="text-[8px] font-bold uppercase tracking-widest text-slate-500 leading-none">
-              {humanPlayerLabel(human.faction)}
-            </div>
-            <div className={`text-base font-black tabular-nums leading-tight ${humanColor}`}>
+      {/* ══ 1. TOP BAR (COMPACT HEADER + ENERGY) ══════════════════════════════ */}
+      <header className="flex flex-col bg-slate-900 border-b border-slate-800 z-20 flex-shrink-0 shadow-md">
+        {/* Row 1: Scores and Turn */}
+        <div className="flex items-center justify-between px-3 py-1.5 h-10">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${human.faction === "RAMA" ? "bg-blue-400" : "bg-red-500"}`} />
+            <div className={`text-lg font-black tabular-nums leading-none ${humanColor}`}>
               {humanTotal}⭐
             </div>
           </div>
-        </div>
 
-        {/* Centre — turn */}
-        <div className="flex flex-col items-center">
-          <div className={[
-            "text-[9px] font-bold uppercase tracking-wider tabular-nums",
-            turn >= 27 ? "text-red-400 animate-pulse" : turn >= 22 ? "text-amber-400" : "text-slate-500",
-          ].join(" ")}>
-            เทิร์น {turn}/30
-          </div>
-          <div className={[
-            "text-[9px] font-semibold px-2 py-0.5 rounded-full mt-0.5",
-            isMyTurn ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-800 text-slate-500",
-          ].join(" ")}>
-            {isMyTurn ? "🎮 ตาคุณ" : "🤖 AI คิด…"}
-          </div>
-        </div>
-
-        {/* AI + menu */}
-        <div className="flex items-center gap-1.5">
-          <div className="text-right">
-            <div className="text-[8px] font-bold uppercase tracking-widest text-slate-500 leading-none">
-              {aiPlayerLabel(ai.faction)}
+          <div className="flex flex-col items-center">
+            <div className={["text-[10px] font-bold uppercase tracking-wider tabular-nums",
+              turn >= 27 ? "text-red-400 animate-pulse" : turn >= 22 ? "text-amber-400" : "text-slate-500",
+            ].join(" ")}>
+              เทิร์น {turn}/30
             </div>
-            <div className={`text-base font-black tabular-nums leading-tight ${aiColor}`}>
+            <div className={["text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 leading-none",
+              isMyTurn ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-500",
+            ].join(" ")}>
+              {isMyTurn ? "🎮 ตาคุณ" : "🤖 AI คิด…"}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className={`text-lg font-black tabular-nums leading-none ${aiColor}`}>
               {aiTotal}⭐
             </div>
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ai.faction === "LANKA" ? "bg-red-500" : "bg-blue-400"}`} />
+            <button
+              onClick={() => router.push("/menu")}
+              className="ml-1 text-xs font-bold px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-400 active:bg-slate-700 transition"
+              style={{ touchAction: "manipulation" }}
+            >
+              ≡
+            </button>
           </div>
-          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${aiDot}`} />
-          <button
-            onClick={() => router.push("/menu")}
-            className="ml-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 active:bg-slate-700 transition"
-            style={{ touchAction: "manipulation" }}
-          >
-            ≡
-          </button>
+        </div>
+
+        {/* Row 2: Status Inline */}
+        <div className="flex items-center justify-between px-3 py-1 bg-slate-950/40 border-t border-slate-800 h-8">
+          {/* Energy */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-orange-400 font-bold text-xs leading-none">⚡</span>
+            <span className="text-orange-300 font-black text-xs tabular-nums leading-none">{human.energy}/10</span>
+            <div className="hidden sm:block w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden ml-1">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-orange-500 to-yellow-400 transition-all duration-300"
+                style={{ width: `${(human.energy / 10) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 text-[10px] font-bold text-slate-500">
+            <span>🎴 {human.deck.length}</span>
+            <span>เหลือลง {2 - cardsPlayed} ใบ</span>
+          </div>
         </div>
       </header>
 
-      {/* ══ 2. SCORE + ENERGY BAR ═══════════════════════════════════════════════ */}
-      <div className="flex items-center justify-between px-3 py-2 text-xs bg-slate-900/50 border-b border-slate-800/50 flex-shrink-0">
-        {/* Energy */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-orange-400 font-bold text-[10px]">⚡</span>
-          <div className="flex items-center gap-1">
-            <span className="text-orange-300 font-black tabular-nums">{human.energy}</span>
-            <span className="text-slate-600 text-[9px]">/10</span>
-          </div>
-          {/* mini energy bar */}
-          <div className="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-yellow-400 transition-all duration-300"
-              style={{ width: `${(human.energy / 10) * 100}%` }}
-            />
-          </div>
-        </div>
+      {/* ══ 2. MESSAGE AND SYNERGY BADGES ══════════════════════════════════════ */}
+      {(message?.text || (isMyTurn && (activeSynergies.length > 0 || comboState.comboCount > 0))) && (
+        <div className="w-full bg-slate-950 p-1 flex justify-center flex-shrink-0 z-10 flex-wrap gap-1">
+          <AnimatePresence mode="wait">
+            {message?.text && (
+              <motion.div
+                key={message.nonce ?? message.text}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className={["px-3 py-1 rounded-full text-[10px] font-bold text-center",
+                  message.kind === "warn"
+                    ? "bg-rose-900/50 border border-rose-500/40 text-rose-300"
+                    : "bg-emerald-900/40 border border-emerald-500/30 text-emerald-300",
+                ].join(" ")}
+              >
+                {message.kind === "warn" ? "⚠️ " : "💬 "}{message.text}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* Card count */}
-        <div className="text-slate-500 text-[9px]">
-          การ์ด {cardsPlayed}/2
-        </div>
-
-        {/* Score comparison */}
-        <div className="flex items-center gap-1 text-[10px]">
-          <span className={humanColor + " font-black tabular-nums"}>{humanTotal}</span>
-          <span className="text-slate-600">vs</span>
-          <span className={aiColor + " font-black tabular-nums"}>{aiTotal}</span>
-          {leading === "HUMAN" && <span className="text-emerald-400 font-bold ml-1">+{humanTotal - aiTotal}</span>}
-          {leading === "AI"    && <span className="text-rose-400 font-bold ml-1">-{aiTotal - humanTotal}</span>}
-        </div>
-
-        {/* Deck */}
-        <div className="flex items-center gap-1 text-[9px] text-slate-500">
-          <span>🃏</span>
-          <span className="tabular-nums text-cyan-400 font-bold">{human.deck.length}</span>
-        </div>
-      </div>
-
-      {/* Active synergy / combo badges */}
-      {(activeSynergies.length > 0 || comboState.comboCount > 0) && isMyTurn && (
-        <div className="flex items-center gap-2 px-3 py-1 bg-slate-900/30 flex-shrink-0 flex-wrap">
-          {activeSynergies.length > 0 && (
-            <span className="rounded-full bg-yellow-400/20 px-2 py-0.5 text-[9px] font-bold text-yellow-200 animate-pulse">
+          {isMyTurn && activeSynergies.length > 0 && (
+            <span className="rounded-full bg-yellow-400/20 px-2 py-1 text-[10px] font-bold text-yellow-300 ring-1 ring-yellow-400/30">
               ✨ พลังร่วมทำงาน!
             </span>
           )}
-          {comboState.comboCount > 0 && (
-            <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-[9px] font-bold text-orange-200">
+          {isMyTurn && comboState.comboCount > 0 && (
+            <span className="rounded-full bg-orange-500/20 px-2 py-1 text-[10px] font-bold text-orange-300 ring-1 ring-orange-500/30">
               🔥 คอมโบ x{comboState.comboCount}
-            </span>
-          )}
-          {comboState.strongerSkillActive && (
-            <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[9px] font-bold text-purple-200">
-              ⚡ สกิลแรงขึ้น!
             </span>
           )}
         </div>
       )}
 
-      {/* ══ 3. BOARD ════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col items-center justify-center px-2 py-1 min-h-0 overflow-hidden">
-        {/* Contextual hint */}
-        <div className="w-full flex justify-center mb-1 flex-shrink-0">
-          <MobileHint isMyTurn={isMyTurn} hasCardSelected={!!selectedCardId} cardsLeft={cardsLeft} />
-        </div>
-
-        {/* Message toast */}
-        <AnimatePresence mode="wait">
-          {message?.text && (
-            <motion.div
-              key={message.nonce ?? message.text}
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className={[
-                "w-full mb-1 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-center flex-shrink-0",
-                message.kind === "warn"
-                  ? "bg-rose-900/50 border border-rose-500/40 text-rose-300"
-                  : "bg-emerald-900/40 border border-emerald-500/30 text-emerald-300",
-              ].join(" ")}
-            >
-              {message.kind === "warn" ? "⚠️ " : "💬 "}{message.text}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Board — square, max 60vh */}
+      {/* ══ 3. BOARD (MAIN FOCUS) ═══════════════════════════════════════════════ */}
+      <div className="flex-1 flex flex-col items-center justify-center p-0 min-h-0 overflow-hidden relative">
+        <MobileHint isMyTurn={isMyTurn} hasCardSelected={!!selectedCardId} cardsLeft={cardsLeft} />
+        
+        {/* Full width board container */}
         <div
-          className="w-full flex-shrink-0"
+          className="w-full flex-shrink-0 flex items-center justify-center"
           style={{
-            aspectRatio: "1 / 1",
-            maxHeight: "58vh",
-            maxWidth: "100%",
+            maxHeight: "65vh", // Maximum height allowed so we don't crunch action bar
           }}
         >
-          <Board compact={true} />
+          {/* Constrain board to a square max 100% width or available height */}
+          <div className="w-full max-w-[100vw] aspect-square p-1" style={{ maxHeight: "100%" }}>
+            <Board compact={true} />
+          </div>
         </div>
       </div>
 
-      {/* ══ 4. ACTION BUTTONS ═══════════════════════════════════════════════════ */}
-      <div className="flex items-center justify-center gap-2 px-3 py-2 border-t border-slate-800 bg-slate-900/70 flex-shrink-0 z-10">
+      {/* ══ 4. ACTION BUTTONS (STICKY) ═════════════════════════════════════════ */}
+      <div className="grid grid-cols-3 gap-2 px-2 py-2 border-t border-slate-800 bg-slate-900/90 flex-shrink-0 z-40">
         <button
           onClick={() => undoLastMove()}
           disabled={!isMyTurn || !undoAvailable}
-          className="flex-1 py-3 text-sm font-semibold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
+          className="py-2.5 text-xs font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
           style={{ touchAction: "manipulation" }}
         >
-          ↩ Undo
+          ↩ ย้อนกลับ
         </button>
         <button
           onClick={() => tryPass()}
           disabled={!isMyTurn}
-          className="flex-1 py-3 text-sm font-semibold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
+          className="py-2.5 text-xs font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
           style={{ touchAction: "manipulation" }}
         >
-          ⏭ ข้าม
+          ⏭ ข้ามตา
         </button>
         <button
           onClick={() => tryEndTurn()}
           disabled={!isMyTurn}
           className={[
-            "flex-[2] py-3 text-sm font-black rounded-xl text-white transition-all disabled:opacity-30 active:scale-95",
+            "py-2.5 text-xs font-black rounded-xl text-white transition-all disabled:opacity-30 active:scale-95",
             isMyTurn
-              ? "bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.45)] active:bg-blue-500"
+              ? "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] active:bg-blue-500"
               : "bg-slate-700",
           ].join(" ")}
           style={{ touchAction: "manipulation" }}
@@ -283,12 +239,12 @@ export function MobileGameLayout() {
         </button>
       </div>
 
-      {/* ══ 5. HAND (fixed bottom strip) ════════════════════════════════════════ */}
+      {/* ══ 5. HAND (CARDS) ════════════════════════════════════════════════════ */}
       <div
-        className="flex-shrink-0 border-t border-slate-800/80 bg-black/70 backdrop-blur-md z-20"
+        className="flex-shrink-0 bg-slate-950 z-30"
         style={{
-          height: 130,
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          height: 165,
+          paddingBottom: "env(safe-area-inset-bottom, 8px)",
         }}
       >
         <MobileHand />

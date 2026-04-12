@@ -204,17 +204,17 @@ export function Board({ compact = false }: { compact?: boolean }) {
     !mounted ? (
       <div className="w-full h-full">
         <div className="relative rounded-xl border border-slate-700 bg-slate-900 p-1 w-full h-full shadow-[0_8px_32px_rgba(2,6,23,0.6)]">
-          <div className="grid grid-cols-7 grid-rows-7 gap-[3px] w-full h-full">
+          <div className="grid grid-cols-7 grid-rows-7 gap-[1px] sm:gap-[3px] w-full h-full">
             {Array.from({ length: 49 }).map((_, i) => (
-              <div key={i} className="w-full h-full rounded-md bg-slate-700 border border-slate-600 animate-pulse" />
+              <div key={i} className="w-full h-full rounded sm:rounded-md bg-slate-700 border border-slate-600 animate-pulse" />
             ))}
           </div>
         </div>
       </div>
     ) : (
     <div className="w-full h-full">
-      <div className="relative rounded-xl border border-slate-700 bg-slate-900 p-1 w-full h-full shadow-[0_8px_32px_rgba(2,6,23,0.6)]">
-        <div className="grid grid-cols-7 grid-rows-7 gap-[3px] w-full h-full">
+      <div className="relative rounded-xl border border-slate-700 bg-slate-900 p-0.5 sm:p-1 w-full h-full shadow-[0_8px_32px_rgba(2,6,23,0.6)]">
+        <div className="grid grid-cols-7 grid-rows-7 gap-[1px] sm:gap-[3px] w-full h-full">
           {board.map((row, r) =>
             row.map((tile, c) => {
               const coord: Coord = { r, c };
@@ -333,7 +333,7 @@ export function Board({ compact = false }: { compact?: boolean }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.28 }}
             className={[
-              "pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-xl px-3 py-1 text-xs font-bold",
+              "pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-xl px-3 py-1 text-[10px] sm:text-xs font-bold text-center max-w-[90vw] whitespace-nowrap",
               skillFx.effectType === "damage"
                 ? "bg-red-500/80 text-white"
                 : skillFx.effectType === "buff" || skillFx.effectType === "global"
@@ -360,7 +360,7 @@ export function Board({ compact = false }: { compact?: boolean }) {
             initial={{ opacity: 0, y: 4, scale: 0.9 }}
             animate={{ opacity: 1, y: -2, scale: 1 }}
             transition={{ duration: 0.3 }}
-            className="pointer-events-none absolute left-1/2 bottom-3 z-20 -translate-x-1/2 rounded-xl px-3 py-1 text-xs font-bold bg-yellow-400/85 text-slate-900 shadow-lg"
+            className="pointer-events-none absolute left-1/2 bottom-3 z-30 -translate-x-1/2 rounded-xl px-3 py-1 text-[10px] sm:text-xs font-bold bg-yellow-400/85 text-slate-900 shadow-lg text-center max-w-[90vw] whitespace-nowrap"
           >
             {synergyLabel}
           </motion.div>
@@ -374,7 +374,7 @@ export function Board({ compact = false }: { compact?: boolean }) {
             animate={{ opacity: 1, scale: 1.08, y: -6 }}
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ type: "spring", stiffness: 320, damping: 18 }}
-            className="pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 rounded-2xl px-4 py-2 text-sm font-extrabold bg-orange-500/90 text-white shadow-[0_0_24px_rgba(249,115,22,0.6)]"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-40 -translate-x-1/2 -translate-y-1/2 rounded-2xl px-4 py-2 text-sm sm:text-base font-extrabold bg-orange-500/95 text-white shadow-[0_0_24px_rgba(249,115,22,0.6)] text-center max-w-[90vw] whitespace-nowrap"
           >
             ⚡ {comboFeedback.label}
             {comboState.comboCount > 1 ? <span className="ml-2 text-xs font-bold opacity-80">x{comboState.comboCount}</span> : null}
