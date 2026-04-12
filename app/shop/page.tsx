@@ -27,35 +27,14 @@ const getRoleInfo = (card: CardTemplate) => {
 };
 
 const parseAbilityText = (card: CardTemplate) => {
-  const parts = { effect: "", condition: "", result: "" };
-  let remaining = card.description || "";
-
-  // Parse เงื่อนไข
-  const condMatch = remaining.match(/เงื่อนไข:\s*([^\s]+(?: [^\s]+)*?)(?=ผลลัพธ์:|$)/);
-  if (condMatch) {
-    parts.condition = condMatch[1].trim();
-    remaining = remaining.replace(condMatch[0], "");
+  if (card.ability && card.ability.trigger !== "-") {
+    return {
+      condition: card.ability.trigger === "-" ? "" : card.ability.trigger,
+      effect: card.ability.action === "ไม่มี" ? "" : card.ability.action,
+      result: card.ability.result === "-" ? "" : card.ability.result
+    };
   }
-
-  // Parse ผลลัพธ์
-  const resMatch = remaining.match(/ผลลัพธ์:\s*(.*)/);
-  if (resMatch) {
-    parts.result = resMatch[1].trim();
-    remaining = remaining.replace(resMatch[0], "");
-  }
-
-  remaining = remaining.replace(/—/g, "").trim();
-  
-  if (!parts.condition && !parts.result && (card.ability?.includes("—") || remaining.includes("—"))) {
-    const src = card.ability?.includes("—") ? card.ability : remaining;
-    const split = src.split("—");
-    parts.effect = split[0].trim();
-    parts.result = split.slice(1).join(" ").trim();
-  } else {
-    parts.effect = remaining || card.ability || "";
-  }
-
-  return parts;
+  return { effect: card.description || "", condition: "", result: "" };
 };
 
 const CardVisualizer = ({ 

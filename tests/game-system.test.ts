@@ -25,6 +25,7 @@ function u(id: string, faction: Faction, cost = 1): Card {
     cost,
     rarity: "common",
     description: "วางยูนิตลงในช่องว่าง",
+    ability: { trigger: "-", action: "-", result: "-", ui: "-", animation: "-" },
     unit: { faction },
   };
 }

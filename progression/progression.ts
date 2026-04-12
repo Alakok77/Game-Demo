@@ -4,6 +4,8 @@
  * loadProfile / saveProfile.
  */
 
+import { loadData, saveData } from "@/lib/storage";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Reward = {
@@ -119,9 +121,20 @@ const STORAGE_KEY = "ramakien_profile_v1";
 export function loadProfile(): PlayerProfile {
   if (typeof window === "undefined") return defaultProfile();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return applyStarterPack(defaultProfile());
-    const p = JSON.parse(raw) as Partial<PlayerProfile & { gold: number }>;
+    // Try to load namespaced data first
+    let p = loadData<Partial<PlayerProfile & { gold: number }> | null>(STORAGE_KEY, null);
+    
+    // If not found, try to migrate from global legacy data
+    if (!p) {
+      const rawLegacy = window.localStorage.getItem(STORAGE_KEY);
+      if (rawLegacy) {
+        p = JSON.parse(rawLegacy);
+        // Save to new namespaced storage right away if migrated
+        saveData(STORAGE_KEY, p);
+      }
+    }
+
+    if (!p) return applyStarterPack(defaultProfile());
     
     // Migrate gold -> coins
     const coins = typeof p.coins === "number" ? p.coins : (typeof p.gold === "number" ? p.gold : 0);
@@ -166,8 +179,7 @@ function applyStarterPack(profile: PlayerProfile): PlayerProfile {
 }
 
 export function saveProfile(profile: PlayerProfile): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+  saveData(STORAGE_KEY, profile);
 }
 
 // ─── Core Logic ───────────────────────────────────────────────────────────────

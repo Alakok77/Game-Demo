@@ -48,6 +48,9 @@ export function Board({ compact = false }: { compact?: boolean }) {
   const selectCard = useGameStore((s) => s.selectCard);
   const setHover = useGameStore((s) => s.setHoverCell);
   const tryPlayAt = useGameStore((s) => s.tryPlayAt);
+  const targetSelection = useGameStore((s) => s.targetSelection);
+  const cancelTargetSelection = useGameStore((s) => s.cancelTargetSelection);
+  const confirmTargetSelection = useGameStore((s) => s.confirmTargetSelection);
 
   const preview = usePreview();
   const suggestion = useSuggestion();
@@ -107,7 +110,20 @@ export function Board({ compact = false }: { compact?: boolean }) {
 
   const validTargets = React.useMemo(() => {
     const set = new Set<string>();
-    if (!selected || phase === "menu" || phase === "tutorial" || phase === "gameOver") return set;
+    if (phase === "menu" || phase === "tutorial" || phase === "gameOver") return set;
+    
+    if (targetSelection) {
+      // In target selection mode, allow any cell to be selected for simplicity in MVP, 
+      // or customize if we build further validation.
+      for (let r = 0; r < size; r++) {
+         for (let c = 0; c < size; c++) {
+             set.add(keyOf({ r, c }));
+         }
+      }
+      return set;
+    }
+
+    if (!selected) return set;
     if (selected.cost > activePS.energy) return set;
     if (cardsPlayed >= 2) return set;
 
@@ -220,6 +236,7 @@ export function Board({ compact = false }: { compact?: boolean }) {
               const coord: Coord = { r, c };
               const k = keyOf(coord);
               const isHovered = hoverCell?.r === r && hoverCell?.c === c;
+              const isSelectedTarget = targetSelection?.selectedCoords.some(sc => sc.r === r && sc.c === c);
               const isValid = validTargets.has(k);
               const groupHovered = hoveredGroup.has(k) && tile.kind === "unit";
               const warn = isHovered && preview && !preview.ok && selected?.type === "unit";
@@ -285,12 +302,22 @@ export function Board({ compact = false }: { compact?: boolean }) {
                     skillPreview={skillPreview || Boolean(skillFx?.keys.has(k))}
                     onClick={() => {
                       if (phase !== "player" || active !== "HUMAN") return;
-                      if (!selectedCardId) return;
+                      // Allow clicking target mode any time
+                      if (!targetSelection && !selectedCardId) return;
                       tryPlayAt(coord);
                     }}
                     onEnter={() => setHover(coord)}
                     onLeave={() => setHover(undefined)}
                   />
+
+                  {isSelectedTarget ? (
+                    <motion.div
+                      className="pointer-events-none absolute inset-0 rounded-xl ring-4 ring-blue-500 bg-blue-500/20 z-40"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: [0.8, 1, 0.8], scale: 1 }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                    />
+                  ) : null}
 
                   {/* group outline */}
                   {groupHovered ? <div className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-white/25" /> : null}

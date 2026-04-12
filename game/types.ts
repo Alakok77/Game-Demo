@@ -27,6 +27,14 @@ export type EffectType =
   | "control";     // removes / displaces a unit temporarily
 
 
+export type AbilityConfig = {
+  trigger: string;
+  action: string;
+  result: string;
+  ui: string;
+  animation: string;
+};
+
 export type CardBase = {
   id: string;
   name: string;
@@ -34,7 +42,7 @@ export type CardBase = {
   rarity: CardRarity;
   tier?: CardTier;
   description: string;
-  ability?: string;
+  ability: AbilityConfig;
   icon?: string;
   image?: string;
   effectType?: EffectType;
@@ -148,6 +156,15 @@ export type PlayerState = {
   mulliganUsed?: boolean;
 };
 
+export type TargetSelectionState = {
+  cardId: string; // The specific card instance ID
+  templateId: string; // To look up the specific logic
+  step: number; // Current step 1, 2, 3...
+  maxSteps: number; // How many targets we need
+  selectedCoords: Coord[]; // Accumulated targets (index 0 is often where the unit was dropped)
+  validTargets?: Coord[];    // Cached valid target cells to highlight
+};
+
 export type GameState = {
   /** Human's chosen faction; mirrored by `human.faction` after `fresh()` / game start. Default RAMA. */
   playerFaction: Faction;
@@ -164,6 +181,7 @@ export type GameState = {
   lastCaptures: CaptureEvent[];
   lastMove?: Move;
   selectedCardId?: string;
+  targetSelection?: TargetSelectionState;
   cardsPlayedThisTurn: number;
   hoverCell?: Coord;
   message?: { kind: "info" | "warn"; text: string; nonce: number };

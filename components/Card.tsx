@@ -216,9 +216,9 @@ export function Card({
             </div>
           </div>
           <div className="text-[11px] text-slate-300 leading-relaxed">{card.description}</div>
-          {card.ability && card.ability !== "ไม่มีความสามารถพิเศษ" ? (
+          {card.ability && card.ability.trigger !== "-" ? (
             <div className="rounded-lg bg-slate-800 px-2 py-1 text-[11px] text-amber-300 font-semibold">
-              {card.ability}
+              {card.ability.action === "ไม่มี" ? card.ability.result : `${card.ability.action} ➔ ${card.ability.result}`}
             </div>
           ) : null}
           <div className="flex gap-1 pt-0.5">
@@ -286,8 +286,8 @@ export function Card({
             {isSkill ? "✨ ความสามารถ" : "👤 รายละเอียด"}
           </div>
           <p className="line-clamp-3 text-[10px] leading-relaxed text-slate-300">
-            {card.ability && card.ability !== "ไม่มีความสามารถพิเศษ"
-              ? card.ability
+            {card.ability && card.ability.trigger !== "-"
+              ? (card.ability.action === "ไม่มี" ? card.ability.result : `${card.ability.action} ➔ ${card.ability.result}`)
               : card.description}
           </p>
         </div>

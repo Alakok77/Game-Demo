@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { loadData, saveData } from "@/lib/storage";
 import type {
   Board,
   Card,
@@ -69,6 +70,8 @@ type Actions = {
   prevTutorial: () => void;
   mulliganOnce: () => void;
   dismissComboFeedback: () => void;
+  cancelTargetSelection: () => void;
+  confirmTargetSelection: () => void;
 };
 
 function makeEmptyBoard(size: number): Board {
@@ -176,7 +179,13 @@ function makeFallbackBasicCard(faction: Faction): UnitCard {
     rarity: "common",
     tier: "basic",
     description: "การ์ดสำรองเพื่อให้เล่นได้ทุกเทิร์น",
-    ability: "ไม่มีความสามารถพิเศษ",
+    ability: {
+      trigger: "-",
+      action: "ไม่มี",
+      result: "-",
+      ui: "-",
+      animation: "ไม่มี"
+    },
     icon: faction === "RAMA" ? "🐒" : "👹",
     effectType: "unit",
     unit: { faction },
@@ -189,15 +198,21 @@ function deckStorageKey(faction: Faction) {
   return `ramakien_custom_deck_${faction}_v1`;
 }
 
-/** Read saved custom deck for UI (e.g. deck builder). Migrates legacy single-slot key for RAMA. */
 export function readStoredCustomDeckTemplateIds(faction: Faction): string[] | undefined {
   if (typeof window === "undefined") return undefined;
   try {
     const key = deckStorageKey(faction);
-    let raw = window.localStorage.getItem(key);
-    if (!raw && faction === "RAMA") raw = window.localStorage.getItem(LEGACY_HUMAN_DECK_STORAGE_KEY);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw);
+    let parsed = loadData<string[] | undefined>(key, undefined);
+    
+    // Legacy cross-user migration
+    if (!parsed && faction === "RAMA") {
+      const raw = window.localStorage.getItem(LEGACY_HUMAN_DECK_STORAGE_KEY);
+      if (raw) {
+        parsed = JSON.parse(raw);
+        saveData(key, parsed);
+      }
+    }
+    
     return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : undefined;
   } catch {
     return undefined;
@@ -209,8 +224,7 @@ function loadCustomDeckIds(faction: Faction): string[] | undefined {
 }
 
 function saveCustomDeckIds(ids: string[], faction: Faction) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(deckStorageKey(faction), JSON.stringify(ids));
+  saveData(deckStorageKey(faction), ids);
 }
 
 function validateDeckTemplateIds(ids: string[], faction: Faction) {
@@ -992,6 +1006,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       activeSynergies: [],
       comboState: makeEmptyComboState(),
       comboFeedback: undefined,
+      targetSelection: undefined,
       cardMap: emptyCardMap,
       tutorialStep: 0,
       consecutivePasses: 0,
@@ -1059,8 +1074,18 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
     }, delay);
   };
 
+  const defaultState = fresh("RAMA");
+  let initialState = defaultState;
+  
+  if (typeof window !== "undefined") {
+    const saved = loadData<GameState | null>("game_state", null);
+    if (saved && saved.board && saved.phase) {
+      initialState = { ...defaultState, ...saved };
+    }
+  }
+
   return {
-    ...fresh("RAMA"),
+    ...initialState,
 
     setSettings: (patch) => set((s) => ({ ...s, settings: { ...s.settings, ...patch } })),
     setPlayerFaction: (faction) => set({ playerFaction: faction }),
@@ -1107,6 +1132,20 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
     tryPlayAt: (cell) => {
       const s = get();
       if (s.phase !== "player" || s.active !== "HUMAN") return;
+
+      if (s.targetSelection) {
+        // Collect target cell
+        const ts = s.targetSelection;
+        // Don't over-collect if we reached max steps, just replace the last one
+        const coords = [...ts.selectedCoords];
+        if (coords.length - 1 < ts.maxSteps) {
+          coords.push(cell);
+        } else {
+          coords[coords.length - 1] = cell; // overwrite last target
+        }
+        return set((st) => ({ ...st, targetSelection: { ...ts, selectedCoords: coords } }));
+      }
+
       const ps = s.human;
       const selected = s.selectedCardId ? ps.hand.find((c) => c.id === s.selectedCardId) : undefined;
       if (!selected) return set((st) => ({ ...st, message: setMessage("กรุณาเลือกการ์ดก่อน", "warn") }));
@@ -1159,6 +1198,29 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           comboState: newComboState,
           comboFeedback,
         };
+
+        const actionText = selected.ability?.action || "";
+        const isPassive = actionText.includes("ไม่มี") || actionText.includes("Passive") || actionText.includes("Auto Action") || actionText.includes("Auto Strike");
+        const needsTarget = selected.tier !== "basic" && !isPassive;
+
+        if (needsTarget) {
+          // Suspend turn, enter target selection
+          next.targetSelection = {
+            cardId: selected.id,
+            templateId: selected.comboType ?? selected.id,
+            step: 1,
+            maxSteps: 1, // Can be expanded via registry lookup
+            selectedCoords: [cell] // initial placement is history index 0
+          };
+          next.message = setMessage(`🎯 โปรดเลือกเป้าหมาย: ${actionText}`);
+          return set(() => next);
+        }
+
+        // Apply visual passive effect if needed (e.g. Ongkot aura flash)
+        if (isPassive && selected.tier !== "basic") {
+           next.message = setMessage(`✨ ความสามารถทำงาน: ${selected.ability?.result}`);
+        }
+
         return set(() => endTurnIfNeeded(next));
       }
 
@@ -1281,7 +1343,64 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           next = { ...next, cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1, selectedCardId: undefined, undoSnapshot: snapshot, comboState: newComboStateStorm, comboFeedback: comboFeedbackStorm, cardMap: newCardMapStorm, activeSynergies: newSynergiesStorm };
           return set(() => endTurnIfNeeded(next));
         }
+
+        // Generic fallback for any other skill in the new library
+        const snapshot = makeUndoSnapshot(s);
+        let nextState = applyMove(s, { kind: "pass" }); // dummy move to progress state
+        nextState = {
+           ...nextState,
+           human: { ...nextState.human, energy: nextState.human.energy - selected.cost }
+        };
+        const actionText = selected.ability?.action || "";
+        const isPassive = actionText.includes("ไม่มี") || actionText.includes("Passive") || actionText.includes("Auto Action") || actionText.includes("Auto Strike");
+        const needsTarget = selected.tier !== "basic" && !isPassive;
+
+        if (needsTarget) {
+          nextState.targetSelection = {
+            cardId: selected.id,
+            templateId: selected.comboType ?? selected.id,
+            step: 1,
+            maxSteps: 1,
+            selectedCoords: [cell] // Skill origin cell
+          };
+          nextState.message = setMessage(`🎯 โปรดเลือกเป้าหมาย: ${actionText}`);
+          return set(() => {
+             nextState.cardsPlayedThisTurn += 1;
+             nextState.selectedCardId = undefined;
+             nextState.undoSnapshot = snapshot;
+             return nextState;
+          });
+        }
       }
+    },
+
+    cancelTargetSelection: () => {
+      const s = get();
+      if (!s.targetSelection || !s.undoSnapshot) return;
+      // Revert state
+      set(() => ({
+         ...s.undoSnapshot,
+         targetSelection: undefined,
+         message: undefined
+      }));
+    },
+
+    confirmTargetSelection: () => {
+      const s = get();
+      if (!s.targetSelection) return;
+      
+      const ts = s.targetSelection;
+      if (ts.selectedCoords.length - 1 < ts.maxSteps) {
+         return set((st) => ({ ...st, message: setMessage("กรุณาเลือกเป้าหมายให้ครบ", "warn") }));
+      }
+      
+      const handCard = s.undoSnapshot?.human.hand.find(c => c.comboType === ts.templateId || c.id === ts.templateId) || { ability: { result: "ใช้สกิลสำเร็จ!" }};
+      
+      // Clear target mode and proceed to end turn
+      let nextState = { ...s, targetSelection: undefined };
+      nextState.message = setMessage(`💥 ${handCard.ability?.result || "อานุภาพสำแดงผล!"}`);
+      
+      return set(() => endTurnIfNeeded(nextState));
     },
 
     tryPass: () => {
@@ -1408,3 +1527,8 @@ export function libertiesOverlay(board: Board) {
   return dots;
 }
 
+if (typeof window !== "undefined") {
+  useGameStore.subscribe((state) => {
+    saveData("game_state", state);
+  });
+}

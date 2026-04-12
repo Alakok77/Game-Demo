@@ -53,27 +53,30 @@ function MobileHint({
 export function MobileGameLayout() {
   const router = useRouter();
 
-  const phase          = useGameStore((s) => s.phase);
-  const active         = useGameStore((s) => s.active);
-  const turn           = useGameStore((s) => s.turn);
-  const human          = useGameStore((s) => s.human);
-  const ai             = useGameStore((s) => s.ai);
-  const scores         = useGameStore((s) => s.scores);
+  const phase = useGameStore((s) => s.phase);
+  const active = useGameStore((s) => s.active);
+  const turn = useGameStore((s) => s.turn);
+  const human = useGameStore((s) => s.human);
+  const ai = useGameStore((s) => s.ai);
+  const scores = useGameStore((s) => s.scores);
   const selectedCardId = useGameStore((s) => s.selectedCardId);
-  const cardsPlayed    = useGameStore((s) => s.cardsPlayedThisTurn);
-  const message        = useGameStore((s) => s.message);
-  const tryPass        = useGameStore((s) => s.tryPass);
-  const tryEndTurn     = useGameStore((s) => s.tryEndTurn);
-  const undoLastMove   = useGameStore((s) => s.undoLastMove);
-  const undoAvailable  = useGameStore((s) => Boolean(s.undoSnapshot));
+  const cardsPlayed = useGameStore((s) => s.cardsPlayedThisTurn);
+  const message = useGameStore((s) => s.message);
+  const tryPass = useGameStore((s) => s.tryPass);
+  const tryEndTurn = useGameStore((s) => s.tryEndTurn);
+  const undoLastMove = useGameStore((s) => s.undoLastMove);
+  const undoAvailable = useGameStore((s) => Boolean(s.undoSnapshot));
+  const targetSelection = useGameStore((s) => s.targetSelection);
+  const cancelTargetSelection = useGameStore((s) => s.cancelTargetSelection);
+  const confirmTargetSelection = useGameStore((s) => s.confirmTargetSelection);
   const activeSynergies = useGameStore((s) => s.activeSynergies);
-  const comboState     = useGameStore((s) => s.comboState);
+  const comboState = useGameStore((s) => s.comboState);
 
-  const isMyTurn   = phase === "player" && active === "HUMAN";
-  const cardsLeft  = 2 - cardsPlayed;
+  const isMyTurn = phase === "player" && active === "HUMAN";
+  const cardsLeft = 2 - cardsPlayed;
   const humanTotal = scores.total[human.faction] ?? 0;
-  const aiTotal    = scores.total[ai.faction] ?? 0;
-  const leading    = humanTotal > aiTotal ? "HUMAN" : humanTotal < aiTotal ? "AI" : "TIED";
+  const aiTotal = scores.total[ai.faction] ?? 0;
+  const leading = humanTotal > aiTotal ? "HUMAN" : humanTotal < aiTotal ? "AI" : "TIED";
 
   // Lock body scroll
   React.useEffect(() => {
@@ -83,7 +86,7 @@ export function MobileGameLayout() {
   }, []);
 
   const humanColor = human.faction === "RAMA" ? "text-blue-300" : "text-red-300";
-  const aiColor    = ai.faction === "LANKA"   ? "text-red-400"  : "text-blue-300";
+  const aiColor = ai.faction === "LANKA" ? "text-red-400" : "text-blue-300";
 
   return (
     <div
@@ -191,7 +194,7 @@ export function MobileGameLayout() {
       {/* ══ 3. BOARD (MAIN FOCUS) ═══════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col items-center justify-center p-0 min-h-0 overflow-hidden relative">
         <MobileHint isMyTurn={isMyTurn} hasCardSelected={!!selectedCardId} cardsLeft={cardsLeft} />
-        
+
         {/* Full width board container */}
         <div
           className="w-full flex-shrink-0 flex items-center justify-center"
@@ -207,41 +210,59 @@ export function MobileGameLayout() {
       </div>
 
       {/* ══ 4. ACTION BUTTONS (STICKY) ═════════════════════════════════════════ */}
-      <div className="grid grid-cols-3 gap-2 px-2 py-2 border-t border-slate-800 bg-slate-900/90 flex-shrink-0 z-40">
-        <button
-          onClick={() => undoLastMove()}
-          disabled={!isMyTurn || !undoAvailable}
-          className="py-2.5 text-xs font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
-          style={{ touchAction: "manipulation" }}
-        >
-          ↩ ย้อนกลับ
-        </button>
-        <button
-          onClick={() => tryPass()}
-          disabled={!isMyTurn}
-          className="py-2.5 text-xs font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
-          style={{ touchAction: "manipulation" }}
-        >
-          ⏭ ข้ามตา
-        </button>
-        <button
-          onClick={() => tryEndTurn()}
-          disabled={!isMyTurn}
-          className={[
-            "py-2.5 text-xs font-black rounded-xl text-white transition-all disabled:opacity-30 active:scale-95",
-            isMyTurn
-              ? "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] active:bg-blue-500"
-              : "bg-slate-700",
-          ].join(" ")}
-          style={{ touchAction: "manipulation" }}
-        >
-          ✅ จบเทิร์น
-        </button>
-      </div>
+      {targetSelection ? (
+        <div className="grid grid-cols-2 gap-2 px-2 py-2 border-t border-slate-800 bg-slate-900/90 flex-shrink-0 z-40">
+          <button
+            onClick={() => cancelTargetSelection()}
+            className="py-2.5 text-sm font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 active:bg-slate-700 transition-colors"
+          >
+            ❌ ยกเลิกสกิล
+          </button>
+          <button
+            onClick={() => confirmTargetSelection()}
+            className="py-2.5 text-sm font-black rounded-xl bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] active:bg-blue-500 transition-all cursor-pointer"
+            style={{ touchAction: "manipulation" }}
+          >
+            🎯 ยืนยันเป้าหมาย ({Math.max(0, targetSelection.selectedCoords.length - 1)}/{targetSelection.maxSteps})
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2 px-2 py-2 border-t border-slate-800 bg-slate-900/90 flex-shrink-0 z-40">
+          <button
+            onClick={() => undoLastMove()}
+            disabled={!isMyTurn || !undoAvailable}
+            className="py-2.5 text-xs font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
+            style={{ touchAction: "manipulation" }}
+          >
+            ↩ ย้อนกลับ
+          </button>
+          <button
+            onClick={() => tryPass()}
+            disabled={!isMyTurn}
+            className="py-2.5 text-xs font-bold rounded-xl bg-slate-800 border border-slate-700 text-slate-300 disabled:opacity-30 active:bg-slate-700 transition-colors"
+            style={{ touchAction: "manipulation" }}
+          >
+            ⏭ ข้ามตา
+          </button>
+          <button
+            onClick={() => tryEndTurn()}
+            disabled={!isMyTurn}
+            className={[
+              "py-2.5 text-xs font-black rounded-xl text-white transition-all disabled:opacity-30 active:scale-95",
+              isMyTurn
+                ? "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] active:bg-blue-500"
+                : "bg-slate-700",
+            ].join(" ")}
+            style={{ touchAction: "manipulation" }}
+          >
+            ✅ จบเทิร์น
+          </button>
+        </div>
+      )}
 
       {/* ══ 5. HAND (CARDS) ════════════════════════════════════════════════════ */}
       <div
-        className="flex-shrink-0 bg-slate-950 z-30"
+        className="flex-shrink-0 bg-slate-950 z-50"
         style={{
           height: 165,
           paddingBottom: "env(safe-area-inset-bottom, 8px)",

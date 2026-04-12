@@ -286,7 +286,7 @@ export function DeckBuilder({ onBack }: { onBack?: () => void }) {
                   <div>
                     <div className="text-sm font-bold text-white">{p.icon} {p.name}</div>
                     <div className="mt-1 text-slate-300">พลังงาน {p.cost} • {p.tier}</div>
-                    <div className="mt-1 text-slate-100">ความสามารถ: {p.ability}</div>
+                    <div className="mt-1 text-slate-100">ความสามารถ: {p.ability?.trigger !== "-" ? (p.ability?.action === "ไม่มี" ? p.ability?.result : `${p.ability?.action} ➔ ${p.ability?.result}`) : "ไม่มี"}</div>
                     <div className="text-slate-400">คำอธิบาย: {p.description}</div>
                   </div>
                 );

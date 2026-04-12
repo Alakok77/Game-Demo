@@ -122,12 +122,14 @@ function CardDetailModal({
             </div>
             <p className="text-sm leading-relaxed text-slate-200">{card.description}</p>
           </div>
-          {card.ability && card.ability !== "ไม่มีความสามารถพิเศษ" && (
+          {card.ability && card.ability.trigger !== "-" && (
             <div className="rounded-xl bg-slate-800/80 border border-slate-700/60 px-4 py-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-1">
                 ⚡ ความสามารถพิเศษ
               </div>
-              <p className="text-sm text-amber-200 font-semibold leading-relaxed">{card.ability}</p>
+              <p className="text-sm text-amber-200 font-semibold leading-relaxed">
+                {card.ability.action === "ไม่มี" ? card.ability.result : `${card.ability.action} ➔ ${card.ability.result}`}
+              </p>
             </div>
           )}
           {canAddReason && (

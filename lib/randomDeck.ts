@@ -128,7 +128,7 @@ function shuffle<T>(arr: T[], rng: () => number): T[] {
 
 /** Card weight for a given archetype — priority tags increase weight */
 function cardWeight(card: CardTemplate, archetype: Archetype): number {
-  const matchCount = card.synergyTags.filter((t) =>
+  const matchCount = card.synergyTags.filter((t: string) =>
     archetype.priorityTags.includes(t)
   ).length;
   return 1 + matchCount * 2;
