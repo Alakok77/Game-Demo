@@ -215,7 +215,7 @@ function DeckSlotCard({
 
       {/* Remove button */}
       <button
-        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600/80 text-white text-[10px] font-black flex items-center justify-center z-10 active:bg-red-500 leading-none"
+        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600/90 text-white text-xs font-black flex items-center justify-center z-10 active:bg-red-500 leading-none shadow-md backdrop-blur-sm"
         onClick={(e) => { e.stopPropagation(); onRemove?.(index); }}
       >
         ×
@@ -223,11 +223,11 @@ function DeckSlotCard({
 
       {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-center px-1 pt-3 pb-1 text-center">
-        <div className="text-xl leading-none mb-0.5">{card.icon ?? "🃏"}</div>
-        <div className="text-[8px] font-bold text-white line-clamp-2 leading-tight px-0.5">
+        <div className="text-3xl sm:text-4xl leading-none mb-1 drop-shadow-md">{card.icon ?? "🃏"}</div>
+        <div className="text-[10px] sm:text-xs font-black text-white line-clamp-2 leading-tight px-1 drop-shadow">
           {card.name}
         </div>
-        <div className="mt-0.5 text-[7px] text-orange-400 font-bold">⚡{card.cost}</div>
+        <div className="mt-1 text-[9px] sm:text-[10px] text-orange-400 font-bold bg-black/40 px-1.5 py-0.5 rounded-md">⚡ {card.cost}</div>
       </div>
     </motion.div>
   );
@@ -549,7 +549,7 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
         {activeSection === "deck" && (
           <div className="px-3 pt-3 pb-4">
             <AnimatePresence>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {Array.from({ length: DECK_SIZE }).map((_, i) => {
                   const id = deckIds[i];
                   return (

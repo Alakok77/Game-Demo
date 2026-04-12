@@ -196,8 +196,7 @@ export default function ShopPage() {
 
   if (!mounted || !profile) {
     return (
-      <div className="h-screen bg-slate-900 p-4 text-white">
-        <Navigation />
+      <div className="h-screen overflow-y-auto bg-slate-950 text-slate-100 pb-[env(safe-area-inset-bottom)] relative select-none">
         <div className="flex h-64 items-center justify-center animate-pulse text-slate-500">กำลังเดินทางไปร้านค้า...</div>
       </div>
     );
@@ -258,7 +257,7 @@ export default function ShopPage() {
   };
 
   return (
-    <div className="h-full bg-slate-950 p-2 md:p-4 text-slate-100 flex flex-col font-sans overflow-hidden">
+    <div className="h-[100dvh] bg-slate-950 p-2 md:p-4 pb-[env(safe-area-inset-bottom,8px)] text-slate-100 flex flex-col font-sans overflow-hidden">
       <div className="mx-auto w-full max-w-6xl flex-1 flex flex-col min-h-0 relative">
         <Navigation />
 

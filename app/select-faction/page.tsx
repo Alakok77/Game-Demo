@@ -39,29 +39,29 @@ function FactionSelectInner() {
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col">
       <Navigation />
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-6">
-        <h1 className="mb-8 text-center text-2xl font-bold tracking-tight text-white md:text-3xl">เลือกฝ่ายของคุณ</h1>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-4 sm:py-6 pb-safe">
+        <h1 className="mb-4 sm:mb-8 text-center text-xl sm:text-2xl font-black tracking-tight text-white md:text-3xl drop-shadow-md">เลือกฝ่ายของคุณ</h1>
 
-        <div className="grid w-full max-w-3xl gap-6 md:grid-cols-2">
+        <div className="grid w-full max-w-3xl gap-3 sm:gap-6 md:grid-cols-2">
           <motion.button
             type="button"
             onClick={() => select("RAMA")}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={[
-              "relative flex flex-col rounded-2xl border-2 p-6 text-left text-white shadow-lg transition",
+              "relative flex flex-col rounded-2xl border-2 p-4 sm:p-6 text-left text-white shadow-lg transition",
               "bg-gradient-to-br from-blue-950/80 via-slate-900 to-amber-950/30",
               choice === "RAMA"
-                ? "border-amber-300/90 shadow-[0_0_32px_rgba(250,204,21,0.45)] ring-2 ring-amber-200/50"
+                ? "border-amber-300/90 shadow-[0_0_24px_rgba(250,204,21,0.45)] ring-2 ring-amber-200/50"
                 : "border-blue-500/40 hover:border-blue-400/70",
             ].join(" ")}
           >
-            <div className="text-3xl">🏹✨</div>
-            <div className="mt-3 text-lg font-bold text-amber-100/95">ฝ่ายพระราม</div>
-            <div className="mt-2 text-sm leading-relaxed text-blue-100/85">
+            <div className="text-2xl sm:text-3xl drop-shadow-md">🏹✨</div>
+            <div className="mt-2 text-base sm:text-lg font-black text-amber-100/95 leading-tight">ฝ่ายพระราม</div>
+            <div className="mt-1 sm:mt-2 text-xs sm:text-sm leading-relaxed text-blue-100/85">
               เน้นการเชื่อมพื้นที่ คล่องตัว วางหมากเร็ว
             </div>
-            <div className="mt-4 text-xs text-blue-200/70">สี: น้ำเงิน · ทอง</div>
+            <div className="mt-2 sm:mt-4 text-[10px] sm:text-xs font-bold text-blue-300/80 uppercase">สี: น้ำเงิน · ทอง</div>
           </motion.button>
 
           <motion.button
@@ -70,27 +70,27 @@ function FactionSelectInner() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={[
-              "relative flex flex-col rounded-2xl border-2 p-6 text-left text-white shadow-lg transition",
+              "relative flex flex-col rounded-2xl border-2 p-4 sm:p-6 text-left text-white shadow-lg transition",
               "bg-gradient-to-br from-red-950/80 via-purple-950/50 to-slate-900",
               choice === "LANKA"
-                ? "border-fuchsia-400/90 shadow-[0_0_32px_rgba(217,70,239,0.45)] ring-2 ring-fuchsia-300/45"
+                ? "border-fuchsia-400/90 shadow-[0_0_24px_rgba(217,70,239,0.45)] ring-2 ring-fuchsia-300/45"
                 : "border-red-500/35 hover:border-red-400/65",
             ].join(" ")}
           >
-            <div className="text-3xl">👹🔥</div>
-            <div className="mt-3 text-lg font-bold text-fuchsia-100">ฝ่ายลงกา</div>
-            <div className="mt-2 text-sm leading-relaxed text-red-100/85">เน้นป้องกัน แข็งแกร่ง คุมพื้นที่แน่น</div>
-            <div className="mt-4 text-xs text-fuchsia-200/75">สี: แดง · ม่วง</div>
+            <div className="text-2xl sm:text-3xl drop-shadow-md">👹🔥</div>
+            <div className="mt-2 text-base sm:text-lg font-black text-fuchsia-100 leading-tight">ฝ่ายลงกา</div>
+            <div className="mt-1 sm:mt-2 text-xs sm:text-sm leading-relaxed text-red-100/85">เน้นป้องกัน แข็งแกร่ง คุมพื้นที่แน่น</div>
+            <div className="mt-2 sm:mt-4 text-[10px] sm:text-xs font-bold text-fuchsia-300/80 uppercase">สี: แดง · ม่วง</div>
           </motion.button>
         </div>
 
-        <motion.div className="mt-10" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+        <motion.div className="mt-6 sm:mt-10" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }}>
           <button
             type="button"
             onClick={handleStart}
-            className="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-10 py-3.5 text-base font-bold text-white shadow-lg shadow-emerald-900/40 hover:from-emerald-500 hover:to-teal-500"
+            className="rounded-2xl bg-gradient-to-b from-emerald-500 to-teal-700 px-12 py-3.5 text-base font-black text-white shadow-[0_4px_20px_rgba(16,185,129,0.4)] hover:brightness-110 active:scale-95 transition-all"
           >
-            เริ่มเกม
+            🚀 เริ่มเกม
           </button>
         </motion.div>
 

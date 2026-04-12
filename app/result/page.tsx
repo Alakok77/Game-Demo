@@ -172,10 +172,10 @@ export default function ResultPage() {
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="mb-6 rounded-3xl border border-white/10 bg-white/5 p-6 text-center backdrop-blur"
+            className="mb-4 sm:mb-6 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6 text-center backdrop-blur"
           >
-            <div className="text-5xl font-black tracking-tight text-white">{winnerLabel}</div>
-            <div className="mt-2 text-sm text-slate-300">ผลการแข่งขัน</div>
+            <div className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-none">{winnerLabel}</div>
+            <div className="mt-2 text-xs sm:text-sm text-slate-300">ผลการแข่งขัน</div>
             {gameOverReason && (
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-slate-700/60 border border-slate-600/60 px-3 py-1 text-xs font-semibold text-slate-300">
                 🏁 เหตุผล: {gameOverReason}
@@ -188,24 +188,24 @@ export default function ResultPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="mb-5 grid grid-cols-2 gap-3"
+            className="mb-4 sm:mb-5 grid grid-cols-2 gap-2 sm:gap-3"
           >
-            <div className={["rounded-2xl border p-4", humanPanelShellClasses(human.faction)].join(" ")}>
-              <div className="mb-1 text-xs font-semibold text-white/70 uppercase tracking-wide">{humanPlayerLabel(human.faction)}</div>
-              <div className="text-3xl font-extrabold text-white">⭐ {scores.total[human.faction]}</div>
-              <div className="mt-2 space-y-0.5 text-xs text-slate-300">
-                <div>🗺️ พื้นที่ของเรา: {scores.territory[human.faction]}</div>
-                <div>⚔️ ล้อมแตก: {scores.captures[human.faction]}</div>
-                <div>🎁 โบนัส: {scores.bonus[human.faction]}</div>
+            <div className={["rounded-2xl border p-3 sm:p-4", humanPanelShellClasses(human.faction)].join(" ")}>
+              <div className="mb-0.5 sm:mb-1 text-[10px] sm:text-xs font-semibold text-white/70 uppercase tracking-wide">{humanPlayerLabel(human.faction)}</div>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white leading-none">⭐ {scores.total[human.faction]}</div>
+              <div className="mt-1.5 sm:mt-2 space-y-0.5 text-[10px] sm:text-xs text-slate-300">
+                <div>🗺️ <span className="hidden sm:inline">พื้นที่ของเรา:</span> {scores.territory[human.faction]}</div>
+                <div>⚔️ <span className="hidden sm:inline">ล้อมแตก:</span> {scores.captures[human.faction]}</div>
+                <div>🎁 <span className="hidden sm:inline">โบนัส:</span> {scores.bonus[human.faction]}</div>
               </div>
             </div>
-            <div className={["rounded-2xl border p-4", aiPanelShellClasses(ai.faction)].join(" ")}>
-              <div className="mb-1 text-xs font-semibold text-white/70 uppercase tracking-wide">{aiPlayerLabel(ai.faction)}</div>
-              <div className="text-3xl font-extrabold text-white">⭐ {scores.total[ai.faction]}</div>
-              <div className="mt-2 space-y-0.5 text-xs text-slate-300">
-                <div>🗺️ พื้นที่ของเรา: {scores.territory[ai.faction]}</div>
-                <div>⚔️ ล้อมแตก: {scores.captures[ai.faction]}</div>
-                <div>🎁 โบนัส: {scores.bonus[ai.faction]}</div>
+            <div className={["rounded-2xl border p-3 sm:p-4", aiPanelShellClasses(ai.faction)].join(" ")}>
+              <div className="mb-0.5 sm:mb-1 text-[10px] sm:text-xs font-semibold text-white/70 uppercase tracking-wide">{aiPlayerLabel(ai.faction)}</div>
+              <div className="text-2xl sm:text-3xl font-extrabold text-white leading-none">⭐ {scores.total[ai.faction]}</div>
+              <div className="mt-1.5 sm:mt-2 space-y-0.5 text-[10px] sm:text-xs text-slate-300">
+                <div>🗺️ <span className="hidden sm:inline">พื้นที่ของเรา:</span> {scores.territory[ai.faction]}</div>
+                <div>⚔️ <span className="hidden sm:inline">ล้อมแตก:</span> {scores.captures[ai.faction]}</div>
+                <div>🎁 <span className="hidden sm:inline">โบนัส:</span> {scores.bonus[ai.faction]}</div>
               </div>
             </div>
           </motion.div>

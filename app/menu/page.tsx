@@ -10,33 +10,33 @@ export default function MenuPage() {
     <div className="h-screen overflow-hidden bg-gradient-to-b from-slate-900 to-slate-800 p-4 text-white">
       <div className="mx-auto h-full w-full max-w-6xl">
         <Navigation />
-        <div className="flex h-[calc(100%-56px)] items-center justify-center">
-          <div className="w-full max-w-md space-y-4">
+        <div className="flex h-[calc(100%-56px)] items-center justify-center pb-[env(safe-area-inset-bottom)]">
+          <div className="w-full max-w-md space-y-4 px-2 sm:px-0">
             {/* Profile Panel */}
             <ProfilePanel />
 
             {/* Game mode card */}
-            <div className="rounded-2xl border border-slate-600 bg-slate-900/90 p-6 text-center shadow-lg">
-              <h1 className="text-2xl font-bold">รามเกียรติ์: ศึกชิงพื้นที่</h1>
-              <p className="mt-1 text-sm text-slate-400">เลือกโหมดที่ต้องการ</p>
-              <div className="mt-5 grid gap-3">
+            <div className="rounded-3xl border border-slate-600/60 bg-slate-900/95 p-5 sm:p-8 text-center shadow-2xl backdrop-blur-md">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-transparent">รามเกียรติ์: ศึกชิงพื้นที่</h1>
+              <p className="mt-1.5 text-sm font-semibold text-slate-400">เลือกโหมดที่ต้องการ</p>
+              <div className="mt-6 flex flex-col gap-3">
                 <button
-                  className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 font-semibold hover:brightness-110 transition"
+                  className="rounded-2xl bg-gradient-to-b from-blue-500 to-blue-700 px-4 py-4 text-lg font-bold shadow-[0_4px_20px_rgba(37,99,235,0.4)] hover:brightness-110 active:scale-95 transition-all"
                   onClick={() => router.push("/select-faction")}
                 >
                   ⚔️ เริ่มเกม
                 </button>
                 <button
-                  className="rounded-xl bg-slate-700 px-4 py-3 font-semibold hover:bg-slate-600 transition"
+                  className="rounded-2xl bg-slate-800 border border-slate-700 px-4 py-3.5 font-bold hover:bg-slate-700 active:scale-95 transition-all w-full leading-tight"
                   onClick={() => router.push("/deck")}
                 >
-                  🃏 Deck Builder
+                  🃏 จัดเด็คการ์ด
                 </button>
                 <button
-                  className="rounded-xl bg-slate-700 px-4 py-3 font-semibold hover:bg-slate-600 transition"
+                  className="rounded-2xl bg-slate-800 border border-slate-700 px-4 py-3.5 font-bold hover:bg-slate-700 active:scale-95 transition-all w-full leading-tight"
                   onClick={() => router.push("/select-faction?tutorial=1")}
                 >
-                  📖 Tutorial
+                  📖 วิธีสอนเล่น
                 </button>
               </div>
             </div>
