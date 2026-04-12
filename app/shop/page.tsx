@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigation } from "@/components/Navigation";
 import { 
   loadProfile, 
@@ -13,6 +13,278 @@ import {
 import { getCardPrice } from "@/progression/rewards";
 import { CARD_LIBRARY, type CardTemplate } from "@/data/cards";
 import { motion, AnimatePresence } from "framer-motion";
+
+// ─── Secret Code Constants ─────────────────────────────────────────────────────
+const SECRET_CODE = "yamaha";
+const STARTER_IDS = [
+  "quick_monkey", "macaque_scout", "monkey_warrior", "macaque_guard", "monkey_archer",
+  "demon_soldier", "demon_guard", "demon_archer", "demon_warrior",
+  "move_skill", "cut_skill", "block_skill",
+];
+
+// ─── Secret Modal Component ───────────────────────────────────────────────────
+function SecretCodeModal({
+  onClose,
+  onUnlock,
+  onReset,
+  isUnlocked,
+}: {
+  onClose: () => void;
+  onUnlock: () => void;
+  onReset: () => void;
+  isUnlocked: boolean;
+}) {
+  const [input, setInput] = useState("");
+  const [shake, setShake] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const handleSubmit = () => {
+    if (input.trim().toLowerCase() === SECRET_CODE) {
+      setSuccess(true);
+      onUnlock();
+    } else {
+      setShake(true);
+      setInput("");
+      setTimeout(() => setShake(false), 600);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <motion.div
+        initial={{ scale: 0.8, y: 30 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.8, y: 30, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 24 }}
+        className="w-full max-w-sm rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-indigo-500/30 shadow-[0_0_60px_rgba(99,102,241,0.25)] p-6 flex flex-col items-center gap-5"
+      >
+        {/* Icon */}
+        <motion.div
+          animate={success ? { rotate: [0, -15, 15, -10, 10, 0], scale: [1, 1.3, 1] } : {}}
+          transition={{ duration: 0.6 }}
+          className="text-5xl select-none"
+        >
+          {success ? "🎉" : "🔐"}
+        </motion.div>
+
+        <div className="text-center">
+          <h2 className="text-xl font-black text-white tracking-wide">โค้ดลับ</h2>
+          <p className="text-xs text-slate-500 mt-1">ใส่รหัสเพื่อปลดล็อคพิเศษ</p>
+        </div>
+
+        {/* Input */}
+        <motion.div
+          animate={shake ? { x: [-8, 8, -6, 6, -4, 4, 0] } : {}}
+          className="w-full"
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            placeholder="ใส่โค้ด..."
+            maxLength={20}
+            className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 outline-none px-4 py-3 text-white font-bold text-center text-lg tracking-[0.3em] placeholder:text-slate-600 placeholder:tracking-normal transition-all"
+          />
+        </motion.div>
+
+        {/* Buttons */}
+        <div className="flex gap-3 w-full">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={handleSubmit}
+            className="flex-1 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-sm shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:brightness-110 transition-all"
+          >
+            ✅ ยืนยัน
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={onClose}
+            className="px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 font-bold text-sm hover:bg-slate-700 transition-all"
+          >
+            ✕
+          </motion.button>
+        </div>
+
+        {/* Reset option (only shown if already unlocked all) */}
+        {isUnlocked && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => { onReset(); onClose(); }}
+            className="text-[10px] text-slate-600 hover:text-rose-400 transition-colors underline underline-offset-2"
+          >
+            🔄 รีเซ็ตกลับการ์ดเริ่มต้น
+          </motion.button>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Celebration Overlay ──────────────────────────────────────────────────────
+function CelebrationOverlay({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3500);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const particles = Array.from({ length: 18 }, (_, i) => i);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] pointer-events-none flex items-center justify-center"
+    >
+      {/* Screen glow burst */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: [0, 0.6, 0], scale: [0.5, 1.8, 2.5] }}
+        transition={{ duration: 1.0, ease: "easeOut" }}
+        className="absolute inset-0 bg-gradient-radial from-indigo-500/40 via-purple-500/20 to-transparent rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(99,102,241,0.5) 0%, rgba(168,85,247,0.2) 40%, transparent 70%)" }}
+      />
+
+      {/* Particle burst */}
+      {particles.map((i) => {
+        const angle = (i / particles.length) * 360;
+        const dist = 120 + Math.random() * 120;
+        const dx = Math.cos((angle * Math.PI) / 180) * dist;
+        const dy = Math.sin((angle * Math.PI) / 180) * dist;
+        const emojis = ["⭐", "✨", "🎉", "💫", "🃏", "🔓"];
+        return (
+          <motion.div
+            key={i}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 0.5 }}
+            animate={{ x: dx, y: dy, opacity: 0, scale: 1.5 }}
+            transition={{ duration: 1.2, delay: Math.random() * 0.3, ease: "easeOut" }}
+            className="absolute text-2xl select-none"
+          >
+            {emojis[i % emojis.length]}
+          </motion.div>
+        );
+      })}
+
+      {/* Main text */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ type: "spring", stiffness: 280, damping: 20, delay: 0.15 }}
+        className="flex flex-col items-center gap-3 px-8 py-6 rounded-3xl bg-slate-900/95 border border-indigo-500/50 shadow-[0_0_60px_rgba(99,102,241,0.5)] backdrop-blur-lg text-center"
+      >
+        <motion.div
+          animate={{ rotate: [0, -10, 10, -8, 8, 0] }}
+          transition={{ duration: 0.8, delay: 0.3 }}
+          className="text-6xl"
+        >
+          🎉
+        </motion.div>
+        <p className="text-2xl font-black text-white">ปลดล็อคสำเร็จ!</p>
+        <p className="text-sm text-indigo-300 font-bold">การ์ดทั้งหมดถูกปลดล็อคแล้ว!</p>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: "100%" }}
+          transition={{ duration: 3, delay: 0.5, ease: "linear" }}
+          className="h-1 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Secret Code Inline (Sidebar) ────────────────────────────────────────────
+function SecretCodeInline({
+  onUnlock,
+  onReset,
+  allUnlocked,
+}: {
+  onUnlock: () => void;
+  onReset: () => void;
+  allUnlocked: boolean;
+}) {
+  const [input, setInput] = useState("");
+  const [shake, setShake] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = () => {
+    if (input.trim().toLowerCase() === SECRET_CODE) {
+      setSuccess(true);
+      setInput("");
+      onUnlock();
+    } else {
+      setShake(true);
+      setInput("");
+      setTimeout(() => setShake(false), 600);
+    }
+  };
+
+  return (
+    <div className="flex flex-shrink-0 flex-col gap-2 rounded-2xl bg-slate-900/80 border border-slate-800 p-3 lg:p-4">
+      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold uppercase tracking-widest">
+        <span>🔐</span> โค้ดลับ
+      </div>
+
+      <motion.div
+        animate={shake ? { x: [-8, 8, -6, 6, -4, 4, 0] } : {}}
+        className="flex gap-2"
+      >
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setSuccess(false); }}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="ใส่โค้ด..."
+          maxLength={20}
+          className="flex-1 min-w-0 rounded-xl bg-slate-800 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 outline-none px-3 py-2 text-white font-bold text-sm tracking-widest placeholder:text-slate-600 placeholder:tracking-normal transition-all"
+        />
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={handleSubmit}
+          className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm transition-all shadow-[0_0_12px_rgba(99,102,241,0.35)] flex-shrink-0"
+        >
+          ✓
+        </motion.button>
+      </motion.div>
+
+      <AnimatePresence>
+        {success && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="text-[10px] text-emerald-400 font-bold text-center"
+          >
+            🎉 ปลดล็อคการ์ดทั้งหมดแล้ว!
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      {allUnlocked && (
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={onReset}
+          className="text-[10px] text-slate-600 hover:text-rose-400 transition-colors text-center underline underline-offset-2 mt-1"
+        >
+          🔄 รีเซ็ตกลับการ์ดเริ่มต้น
+        </motion.button>
+      )}
+    </div>
+  );
+}
 
 // Helper parsers for cleaner UX
 const getRoleInfo = (card: CardTemplate) => {
@@ -168,6 +440,68 @@ export default function ShopPage() {
   
   const [flyCoins, setFlyCoins] = useState<{id:number, x:number, y:number}[]>([]);
 
+  // ── Secret Code State ────────────────────────────────────────────────────────
+  const [showSecretModal, setShowSecretModal] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const titleTapCount = useRef(0);
+  const titleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keyBuffer = useRef("");
+  const keyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const allUnlocked = profile
+    ? CARD_LIBRARY.every((c) => profile.ownedCardTemplateIds.includes(c.templateId))
+    : false;
+
+  // Keyboard listener — type "yamaha" anywhere on the shop page
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      keyBuffer.current += e.key.toLowerCase();
+      if (keyBuffer.current.length > SECRET_CODE.length) {
+        keyBuffer.current = keyBuffer.current.slice(-SECRET_CODE.length);
+      }
+      if (keyTimer.current) clearTimeout(keyTimer.current);
+      keyTimer.current = setTimeout(() => { keyBuffer.current = ""; }, 1500);
+      if (keyBuffer.current === SECRET_CODE) {
+        keyBuffer.current = "";
+        setShowSecretModal(true);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  // Mobile: tap shop title 7 times rapidly
+  const handleTitleTap = () => {
+    titleTapCount.current += 1;
+    if (titleTapTimer.current) clearTimeout(titleTapTimer.current);
+    titleTapTimer.current = setTimeout(() => { titleTapCount.current = 0; }, 1200);
+    if (titleTapCount.current >= 7) {
+      titleTapCount.current = 0;
+      setShowSecretModal(true);
+    }
+  };
+
+  // Unlock all cards
+  const handleUnlockAll = () => {
+    if (!profile) return;
+    const allIds = CARD_LIBRARY.map((c) => c.templateId);
+    const merged = Array.from(new Set([...profile.ownedCardTemplateIds, ...allIds]));
+    const newProfile: PlayerProfile = { ...profile, ownedCardTemplateIds: merged };
+    saveProfile(newProfile);
+    setProfile(newProfile);
+    setShowSecretModal(false);
+    setShowCelebration(true);
+  };
+
+  // Reset back to starter cards
+  const handleResetCards = () => {
+    if (!profile) return;
+    const newProfile: PlayerProfile = { ...profile, ownedCardTemplateIds: [...STARTER_IDS] };
+    saveProfile(newProfile);
+    setProfile(newProfile);
+  };
+
   useEffect(() => {
     setProfile(loadProfile());
     setMounted(true);
@@ -245,7 +579,13 @@ export default function ShopPage() {
           <div className="mb-2 mt-1 md:mb-6 rounded-xl md:rounded-2xl bg-slate-900 border border-slate-800 p-2 sm:p-4 shadow-md flex flex-row items-center justify-between gap-2 flex-shrink-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-3xl font-black bg-gradient-to-r from-indigo-300 to-purple-400 bg-clip-text text-transparent truncate">🛒 พ่อค้าพเนจร</h1>
+              {/* 7-tap secret trigger on title (mobile) */}
+              <h1
+                onClick={handleTitleTap}
+                className="text-lg md:text-3xl font-black bg-gradient-to-r from-indigo-300 to-purple-400 bg-clip-text text-transparent truncate select-none cursor-default"
+              >
+                🛒 พ่อค้าพเนจร
+              </h1>
               {/* Inline Pack Button to save vertical space on mobile */}
               <button
                 onClick={handleBuyPack}
@@ -311,6 +651,9 @@ export default function ShopPage() {
               </div>
             </div>
 
+            {/* ── Secret Code Input Box ── */}
+            <SecretCodeInline onUnlock={handleUnlockAll} onReset={handleResetCards} allUnlocked={allUnlocked} />
+
             {/* Pack Banner Desktop */}
             <motion.div 
               whileHover={{ scale: 1.02 }}
@@ -366,6 +709,25 @@ export default function ShopPage() {
           </div>
         </div>
       </div>
+
+        {/* ── Secret Code Modal ── */}
+        <AnimatePresence>
+          {showSecretModal && (
+            <SecretCodeModal
+              onClose={() => setShowSecretModal(false)}
+              onUnlock={handleUnlockAll}
+              onReset={handleResetCards}
+              isUnlocked={allUnlocked}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* ── Celebration Overlay ── */}
+        <AnimatePresence>
+          {showCelebration && (
+            <CelebrationOverlay onDone={() => setShowCelebration(false)} />
+          )}
+        </AnimatePresence>
 
         {/* ── Float Effects ── */}
         <AnimatePresence>
