@@ -220,7 +220,7 @@ export function Board({ compact = false }: { compact?: boolean }) {
     !mounted ? (
       <div className="w-full h-full">
         <div className="relative rounded-xl border border-slate-700 bg-slate-900 p-1 w-full h-full shadow-[0_8px_32px_rgba(2,6,23,0.6)]">
-          <div className="grid grid-cols-7 grid-rows-7 gap-[1px] sm:gap-[3px] w-full h-full">
+          <div className="grid grid-cols-7 grid-rows-7 gap-[4px] sm:gap-[8px] w-full h-full">
             {Array.from({ length: 49 }).map((_, i) => (
               <div key={i} className="w-full h-full rounded sm:rounded-md bg-slate-700 border border-slate-600 animate-pulse" />
             ))}
@@ -230,7 +230,7 @@ export function Board({ compact = false }: { compact?: boolean }) {
     ) : (
     <div className="w-full h-full">
       <div className="relative rounded-xl border border-slate-700 bg-slate-900 p-0.5 sm:p-1 w-full h-full shadow-[0_8px_32px_rgba(2,6,23,0.6)]">
-        <div className="grid grid-cols-7 grid-rows-7 gap-[1px] sm:gap-[3px] w-full h-full">
+        <div className="grid grid-cols-7 grid-rows-7 gap-[4px] sm:gap-[8px] w-full h-full">
           {board.map((row, r) =>
             row.map((tile, c) => {
               const coord: Coord = { r, c };

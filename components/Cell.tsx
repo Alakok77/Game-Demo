@@ -3,14 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import type { Coord, Faction, Tile } from "@/game/types";
 import { placementRingClasses, unitHoverRingClasses } from "@/lib/factionUi";
-
-// ─── Stone rendering ──────────────────────────────────────────────────────────
-
-function stoneStyle(f: Faction) {
-  return f === "RAMA"
-    ? "bg-gradient-to-b from-blue-300 to-blue-800 shadow-[0_8px_28px_rgba(59,130,246,0.60)] ring-2 ring-yellow-400/80"
-    : "bg-gradient-to-b from-red-300 to-red-900 shadow-[0_8px_28px_rgba(239,68,68,0.52)] ring-2 ring-purple-500/80";
-}
+import { BoardUnit } from "./BoardUnit";
+import { CARD_LIBRARY } from "@/data/cards";
+import { useEffect, useState } from "react";
 
 // ─── Territory visual helpers ─────────────────────────────────────────────────
 
@@ -82,12 +77,32 @@ export function Cell({
   onEnter: () => void;
   onLeave: () => void;
 }) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const [mobileTooltip, setMobileTooltip] = useState(false);
+
+  // Auto-hide mobile tooltip after 3s
+  useEffect(() => {
+    if (mobileTooltip) {
+      const t = setTimeout(() => setMobileTooltip(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [mobileTooltip]);
+
+  const showTooltip = (isHovered && !showGhost) || (isMobile && mobileTooltip);
   const isTerritory = territoryOwner !== "none";
   const isPlayerTerritory = isTerritory && territoryOwner === humanFaction;
   const isEnemyTerritory = isTerritory && territoryOwner !== humanFaction;
 
   // When a card is selected, dim everything that isn't a valid target
-  const dimmed = hasCardSelected && !isValidTarget && tile.kind !== "unit";
+  // But never dim units — they might be valid skill targets or context clues
+  const dimmed = hasCardSelected && !isValidTarget && tile.kind === "empty";
 
   // Decide the base background
   const baseBg = tile.kind === "block"
@@ -112,24 +127,29 @@ export function Cell({
   })();
 
   return (
-    <button
-      aria-label={`cell-${coord.r}-${coord.c}`}
-      onClick={onClick}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-      onFocus={onEnter}
-      onBlur={onLeave}
-      className={[
-        "relative w-full h-full rounded-lg sm:rounded-xl",
-        baseBg,
-        "border transition-all duration-150",
-        "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.35)]",
-        borderClass,
-        dimmed ? "opacity-35" : "",
-        isValidTarget ? "cursor-pointer" : "cursor-default",
-        warning ? "animate-cell-warn" : "",
-      ].join(" ")}
-    >
+      <button
+        aria-label={`cell-${coord.r}-${coord.c}`}
+        onClick={() => {
+          if (isMobile && tile.kind === "unit" && !hasCardSelected) {
+            setMobileTooltip(!mobileTooltip);
+          }
+          onClick();
+        }}
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+        onFocus={onEnter}
+        onBlur={onLeave}
+        className={[
+          "relative w-full h-full rounded-lg sm:rounded-xl",
+          baseBg,
+          "border transition-all duration-150",
+          "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.35)]",
+          borderClass,
+          dimmed ? "opacity-35" : "",
+          isValidTarget ? "cursor-pointer" : "cursor-default",
+          warning ? "animate-cell-warn" : "",
+        ].join(" ")}
+      >
       {/* ══ TERRITORY LAYER ═════════════════════════════════════════ */}
 
       {/* Strong gradient fill */}
@@ -197,6 +217,7 @@ export function Cell({
 
       {/* ══ VALID TARGET MARKERS ══════════════════════════════════════ */}
 
+      {/* Empty cell valid target (unit placement) */}
       {isValidTarget && tile.kind === "empty" ? (
         <>
           <div
@@ -214,6 +235,16 @@ export function Cell({
               actingFaction === "RAMA" ? "bg-blue-400/70" : "bg-red-400/70",
             ].join(" ")}
           />
+        </>
+      ) : null}
+
+      {/* Enemy unit valid skill target — pulsing red/orange ring */}
+      {isValidTarget && tile.kind === "unit" && tile.faction !== actingFaction ? (
+        <>
+          <div className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-red-400/90 animate-playable-pulse" />
+          <div className="pointer-events-none absolute inset-0 rounded-xl bg-red-400/15" />
+          {/* crosshair centre dot */}
+          <div className="pointer-events-none absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-400/80 ring-1 ring-white/60" />
         </>
       ) : null}
 
@@ -265,32 +296,49 @@ export function Cell({
         ) : null}
       </AnimatePresence>
 
-      {/* ══ UNIT STONE ═══════════════════════════════════════════════ */}
+      {/* ══ UNIT STONE RENDERER (REPLACED WITH BOARDUNIT) ══════════════ */}
       <AnimatePresence>
         {tile.kind === "unit" ? (
           <motion.div
-            key={`stone-${coord.r}-${coord.c}-${tile.faction}`}
+            key={`unit-${coord.r}-${coord.c}-${tile.templateId}`}
+            layout
             initial={{ opacity: 0, scale: 0.55, y: 5 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.75 }}
+            animate={{ 
+              opacity: 1, 
+              scale: isHovered ? 1.1 : 1, // Increased scale per requirement
+              y: 0,
+              zIndex: isHovered ? 50 : 10
+            }}
+            exit={{ opacity: 0, scale: 0, rotate: 45 }} // 'Breaking' effect
             transition={{ type: "spring", stiffness: 380, damping: 22 }}
-            className={[
-              "absolute left-1/2 top-1/2 size-[72%] -translate-x-1/2 -translate-y-1/2",
-              tile.faction === "RAMA" ? "rounded-full" : "rounded-[38%]",
-              stoneStyle(tile.faction),
-            ].join(" ")}
+            className="absolute inset-1 pointer-events-none"
           >
-            {/* specular highlight */}
-            <div
-              className={[
-                "absolute inset-0 bg-[radial-gradient(circle_at_28%_22%,rgba(255,255,255,0.42),transparent_55%)]",
-                tile.faction === "RAMA" ? "rounded-full" : "rounded-[38%]",
-              ].join(" ")}
+            <BoardUnit 
+              templateId={tile.templateId}
+              faction={tile.faction}
+              isPlayer={tile.faction === humanFaction}
+              statusEffects={tile.statusEffects}
+              isMobile={isMobile}
             />
-            {/* faction symbol */}
-            <div className="absolute inset-0 flex items-center justify-center text-[11px] font-black opacity-65 select-none">
-              {tile.faction === "RAMA" ? "⭐" : "🔥"}
-            </div>
+            
+            {/* MINI TOOLTIP ON HOVER / TAP */}
+            {showTooltip && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8, y: 5 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="absolute -top-16 left-1/2 -translate-x-1/2 z-[100] min-w-32 bg-slate-900 border border-white/20 rounded shadow-2xl p-2 text-[10px] pointer-events-none"
+              >
+                <div className="font-bold text-yellow-300">
+                  {CARD_LIBRARY.find(c => c.templateId === tile.templateId)?.name || (tile.faction === "RAMA" ? "วานร" : "ยักษ์")}
+                </div>
+                <div className="text-white/70 line-clamp-2">
+                  {CARD_LIBRARY.find(c => c.templateId === tile.templateId)?.ability?.result || "ไม่มีความสามารถ"}
+                </div>
+                <div className={`mt-0.5 font-semibold ${tile.faction === humanFaction ? "text-blue-400" : "text-red-400"}`}>
+                  {tile.faction === humanFaction ? "ฝ่ายคุณ" : "ฝ่ายศัตรู"}
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -321,10 +369,8 @@ export function Cell({
       {/* ══ CAPTURE FX ══════════════════════════════════════════════ */}
       {captureFx ? (
         <>
-          <div className="pointer-events-none absolute inset-0 rounded-xl bg-red-500/32 animate-capture-flash" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-300 animate-capture-particle-1" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-200 animate-capture-particle-2" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-300 animate-capture-particle-3" />
+          <div className="pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500 to-red-500 opacity-60 animate-flash-fast" />
+          <div className="pointer-events-none absolute inset-0 rounded-xl bg-white/20 animate-capture-flash" />
         </>
       ) : null}
 

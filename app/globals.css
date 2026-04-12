@@ -148,6 +148,62 @@ body {
   animation: territory-gain 0.85s ease-out forwards;
 }
 
+/* ─── Character specific ambient effects ─────────────────────────────────────── */
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.15); }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
+
+@keyframes flash-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-flash-fast {
+  animation: flash-fast 0.4s ease-in-out infinite;
+}
+
+.hanuman-wind {
+  filter: drop-shadow(0 0 8px rgba(147, 197, 253, 0.5));
+}
+
+.rama-light {
+  filter: drop-shadow(0 0 12px rgba(253, 224, 71, 0.6));
+}
+
+.thotsakan-aura {
+  filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.6));
+}
+
+.sida-glow {
+  filter: drop-shadow(0 0 8px rgba(244, 114, 182, 0.5));
+}
+
+/* ─── Faction Textures ─────────────────────────────────────────────────────── */
+
+.bg-texture-rama {
+  background-image: 
+    radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0);
+  background-size: 8px 8px;
+}
+
+.bg-texture-lanka {
+  background-image: 
+    linear-gradient(45deg, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 75%, transparent 75%, transparent);
+  background-size: 12px 12px;
+}
+
 /* ─── Mobile touch UX ───────────────────────────────────────────────────────── */
 
 /* Force hardware-accelerated tap response on interactive elements */

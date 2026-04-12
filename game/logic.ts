@@ -94,9 +94,9 @@ export function removeGroup(board: Board, group: Coord[]): Board {
   return next;
 }
 
-export function placeUnit(board: Board, at: Coord, faction: Faction): Board {
+export function placeUnit(board: Board, at: Coord, faction: Faction, templateId?: string): Board {
   const next = cloneBoard(board);
-  next[at.r]![at.c] = { kind: "unit", faction };
+  next[at.r]![at.c] = { kind: "unit", faction, templateId, statusEffects: [] };
   return next;
 }
 

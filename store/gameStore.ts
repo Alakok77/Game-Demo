@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { loadData, saveData } from "@/lib/storage";
+import { applyCardEffect } from "@/game/abilityExecution";
 import type {
   Board,
   Card,
@@ -28,6 +29,7 @@ import {
 } from "@/game/logic";
 import { computeScore, emptyTerritoryMap } from "@/game/territory";
 import { aiChooseMove } from "@/game/ai";
+import { getTargetDef } from "@/game/targetMechanics";
 import {
   CARD_LIBRARY,
   validateDeckOwnership,
@@ -72,6 +74,7 @@ type Actions = {
   dismissComboFeedback: () => void;
   cancelTargetSelection: () => void;
   confirmTargetSelection: () => void;
+  triggerActiveEffect: (payload: import("@/game/types").ActiveEffectPayload) => void;
 };
 
 function makeEmptyBoard(size: number): Board {
@@ -181,6 +184,7 @@ function makeFallbackBasicCard(faction: Faction): UnitCard {
     description: "การ์ดสำรองเพื่อให้เล่นได้ทุกเทิร์น",
     ability: {
       trigger: "-",
+      requiresTarget: false,
       action: "ไม่มี",
       result: "-",
       ui: "-",
@@ -399,7 +403,7 @@ function makeUndoSnapshot(state: GameState): NonNullable<GameState["undoSnapshot
     },
     activeSynergies: [...state.activeSynergies],
     comboState: { ...state.comboState, playedTemplateIds: [...state.comboState.playedTemplateIds], playedCardTypes: [...state.comboState.playedCardTypes] },
-    cardMap: new Map(state.cardMap),
+    cardMap: state.cardMap instanceof Map ? new Map(state.cardMap) : new Map(Object.entries(state.cardMap as Record<string, import("@/game/synergy").CellCardInfo>)),
   };
 }
 
@@ -633,7 +637,7 @@ function applyMove(state: GameState, move: Move): GameState {
     }
     const legal = isSuicideUnlessCapture(board, move.at, faction);
     if (!legal.ok) return state;
-    board = placeUnit(board, move.at, faction);
+    board = placeUnit(board, move.at, faction, playedCard?.comboType);
     const after = applyCapturesAfterPlacement(board, move.at, faction);
     board = after.board;
     lastCaptures = applyCaptured(after.captured);
@@ -1119,11 +1123,22 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
     restart: () => set(() => fresh(get().playerFaction ?? "RAMA")),
 
     selectCard: (cardId) =>
-      set((s) => ({
-        ...s,
-        selectedCardId: cardId,
-        message: cardId ? s.message : undefined,
-      })),
+      set((s) => {
+        if (!cardId) return { ...s, selectedCardId: undefined, message: undefined };
+        const card = s.human.hand.find(c => c.id === cardId);
+        let hint: string | undefined;
+        if (card?.type === "skill") {
+          if (card.skill.kind === "destroyWeakGroup") hint = "🎲 คลิกที่ใดก็ได้บนกระดาน — สุ่มทำลายศัตรูที่อ่อนแอ";
+          else if (card.skill.kind === "pushUnit") hint = "🎲 คลิกที่ใดก็ได้บนกระดาน — สุ่มผลักยูนิตศัตรู 1 ตัว";
+          else if (card.skill.kind === "stormCut") hint = "🎲 คลิกที่ใดก็ได้บนกระดาน — สุ่มจุดระเบิดทำลายล้าง 3x3";
+          else if (card.skill.kind === "blockTile") hint = "🎲 คลิกที่ใดก็ได้บนกระดาน — สุ่มสร้างกำแพงชั่วคราว";
+        }
+        return {
+          ...s,
+          selectedCardId: cardId,
+          message: hint ? setMessage(hint) : s.message,
+        };
+      }),
 
     setHoverCell: (cell) => set((s) => ({ ...s, hoverCell: cell })),
 
@@ -1133,18 +1148,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       const s = get();
       if (s.phase !== "player" || s.active !== "HUMAN") return;
 
-      if (s.targetSelection) {
-        // Collect target cell
-        const ts = s.targetSelection;
-        // Don't over-collect if we reached max steps, just replace the last one
-        const coords = [...ts.selectedCoords];
-        if (coords.length - 1 < ts.maxSteps) {
-          coords.push(cell);
-        } else {
-          coords[coords.length - 1] = cell; // overwrite last target
-        }
-        return set((st) => ({ ...st, targetSelection: { ...ts, selectedCoords: coords } }));
-      }
+      // Target selection mode is removed as per user request for instant auto-execution.
 
       const ps = s.human;
       const selected = s.selectedCardId ? ps.hand.find((c) => c.id === s.selectedCardId) : undefined;
@@ -1199,178 +1203,82 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           comboFeedback,
         };
 
-        const actionText = selected.ability?.action || "";
-        const isPassive = actionText.includes("ไม่มี") || actionText.includes("Passive") || actionText.includes("Auto Action") || actionText.includes("Auto Strike");
-        const needsTarget = selected.tier !== "basic" && !isPassive;
+        // Apply ability effect immediately (instant auto-execution)
+        if (selected.ability) {
+           // Before ability, we already have 'next' from applyMove which handled placement and dismissal.
+           next.board = applyCardEffect(next.board, selected.comboType ?? selected.id, [cell], ps.faction);
+           const { scores, territoryMap } = recompute(next.board, next.human, next.ai);
+           next.scores = scores; next.territoryMap = territoryMap;
+           next.cardMap = buildCardMap(next.board, next.human, next.ai, next.cardMap);
+           next.activeSynergies = recomputeSynergies(next.board, next.cardMap, next.territoryMap);
 
-        if (needsTarget) {
-          // Suspend turn, enter target selection
-          next.targetSelection = {
-            cardId: selected.id,
-            templateId: selected.comboType ?? selected.id,
-            step: 1,
-            maxSteps: 1, // Can be expanded via registry lookup
-            selectedCoords: [cell] // initial placement is history index 0
-          };
-          next.message = setMessage(`🎯 โปรดเลือกเป้าหมาย: ${actionText}`);
-          return set(() => next);
-        }
-
-        // Apply visual passive effect if needed (e.g. Ongkot aura flash)
-        if (isPassive && selected.tier !== "basic") {
-           next.message = setMessage(`✨ ความสามารถทำงาน: ${selected.ability?.result}`);
+           next.message = setMessage(`✨ ${selected.name}: ${selected.ability.result}`);
+           next.activeEffect = {
+             cardName: selected.name,
+             icon: selected.icon || "",
+             type: selected.type,
+             action: selected.ability.action,
+             result: selected.ability.result,
+           };
         }
 
         return set(() => endTurnIfNeeded(next));
       }
 
       if (selected.type === "skill") {
-        if (selected.skill.kind === "blockTile") {
-          const tile = s.board[cell.r]?.[cell.c];
-          if (!tile || tile.kind !== "empty") return set((st) => ({ ...st, message: setMessage("ตำแหน่งนี้วางไม่ได้", "warn") }));
-          const snapshot = makeUndoSnapshot(s);
-          let next = applyMove(s, { kind: "skillBlockTile", caster: ps.faction, at: cell, durationTurns: 2, fromCardId: selected.id });
-
-          // Combo tracking for skills
-          const newComboState: ComboState = {
-            ...s.comboState,
-            playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
-            playedCardTypes: [...s.comboState.playedCardTypes, "skill"],
-          };
-          const comboResult = evaluateCombo(newComboState);
-          let comboFeedback: ComboFeedback | undefined;
-          if (comboResult) {
-            newComboState.comboCount = s.comboState.comboCount + 1;
-            newComboState.totalCombosThisGame = (s.comboState.totalCombosThisGame ?? 0) + 1;
-            if (comboResult.energyBonus > 0) {
-              next = { ...next, human: { ...next.human, energy: Math.min(10, next.human.energy + comboResult.energyBonus) } };
-              newComboState.energyGranted = s.comboState.energyGranted + comboResult.energyBonus;
-            }
-            if (comboResult.strongerSkill) newComboState.strongerSkillActive = true;
-            comboFeedback = { kind: comboResult.kind, label: comboResult.label, nonce: Date.now() + Math.random() };
-          }
-          const newCardMap = buildCardMap(next.board, next.human, next.ai, s.cardMap);
-          const newSynergies = recomputeSynergies(next.board, newCardMap, next.territoryMap);
-          next = { ...next, cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1, selectedCardId: undefined, undoSnapshot: snapshot, comboState: newComboState, comboFeedback, cardMap: newCardMap, activeSynergies: newSynergies };
-          return set(() => endTurnIfNeeded(next));
-        }
-        if (selected.skill.kind === "destroyWeakGroup") {
-          const t = s.board[cell.r]?.[cell.c];
-          if (!t || t.kind !== "unit" || t.faction === ps.faction) return set((st) => ({ ...st, message: setMessage("กรุณาเลือกยูนิตฝ่ายตรงข้าม", "warn") }));
-          const g = getGroup(s.board, cell);
-          const libs = getLiberties(s.board, g).length;
-          // If stronger skill combo is active, threshold drops to ≤1; otherwise ≤2
-          const threshold = s.comboState.strongerSkillActive ? 1 : 2;
-          if (libs > threshold) return set((st) => ({ ...st, message: setMessage(`กลุ่มนี้ยังไม่อ่อนแอ (ต้องมีช่องหายใจไม่เกิน ${threshold})`, "warn") }));
-          const snapshot = makeUndoSnapshot(s);
-          let next = applyMove(s, { kind: "skillDestroyWeakGroup", caster: ps.faction, targetAnyCellInEnemyGroup: cell, fromCardId: selected.id });
-          // Combo tracking
-          const newComboState: ComboState = {
-            ...s.comboState,
-            playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
-            playedCardTypes: [...s.comboState.playedCardTypes, "skill"],
-          };
-          const comboResult = evaluateCombo(newComboState);
-          let comboFeedback: ComboFeedback | undefined;
-          if (comboResult) {
-            newComboState.comboCount = s.comboState.comboCount + 1;
-            newComboState.totalCombosThisGame = (s.comboState.totalCombosThisGame ?? 0) + 1;
-            if (comboResult.energyBonus > 0) {
-              next = { ...next, human: { ...next.human, energy: Math.min(10, next.human.energy + comboResult.energyBonus) } };
-              newComboState.energyGranted = s.comboState.energyGranted + comboResult.energyBonus;
-            }
-            if (comboResult.strongerSkill) newComboState.strongerSkillActive = true;
-            comboFeedback = { kind: comboResult.kind, label: comboResult.label, nonce: Date.now() + Math.random() };
-          }
-          const newCardMap = buildCardMap(next.board, next.human, next.ai, s.cardMap);
-          const newSynergies = recomputeSynergies(next.board, newCardMap, next.territoryMap);
-          next = { ...next, cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1, selectedCardId: undefined, undoSnapshot: snapshot, comboState: newComboState, comboFeedback, cardMap: newCardMap, activeSynergies: newSynergies };
-          return set(() => endTurnIfNeeded(next));
-        }
-        if (selected.skill.kind === "pushUnit") {
-          // Push: click enemy unit, then auto-push away from center (readable for beginners).
-          const t = s.board[cell.r]?.[cell.c];
-          if (!t || t.kind !== "unit" || t.faction === ps.faction) return set((st) => ({ ...st, message: setMessage("เลือกยูนิตศัตรูที่ต้องการผลัก", "warn") }));
-          const dr = cell.r - 3;
-          const dc = cell.c - 3;
-          const dir = Math.abs(dr) >= Math.abs(dc) ? (dr < 0 ? "up" : "down") : dc < 0 ? "left" : "right";
-          const snapshot = makeUndoSnapshot(s);
-          let next = applyMove(s, { kind: "skillPushUnit", caster: ps.faction, from: cell, dir, fromCardId: selected.id });
-          // Combo tracking
-          const newComboStatePush: ComboState = {
-            ...s.comboState,
-            playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
-            playedCardTypes: [...s.comboState.playedCardTypes, "skill"],
-          };
-          const comboResultPush = evaluateCombo(newComboStatePush);
-          let comboFeedbackPush: ComboFeedback | undefined;
-          if (comboResultPush) {
-            newComboStatePush.comboCount = s.comboState.comboCount + 1;
-            newComboStatePush.totalCombosThisGame = (s.comboState.totalCombosThisGame ?? 0) + 1;
-            if (comboResultPush.energyBonus > 0) {
-              next = { ...next, human: { ...next.human, energy: Math.min(10, next.human.energy + comboResultPush.energyBonus) } };
-              newComboStatePush.energyGranted = s.comboState.energyGranted + comboResultPush.energyBonus;
-            }
-            comboFeedbackPush = { kind: comboResultPush.kind, label: comboResultPush.label, nonce: Date.now() + Math.random() };
-          }
-          const newCardMapPush = buildCardMap(next.board, next.human, next.ai, s.cardMap);
-          const newSynergiesPush = recomputeSynergies(next.board, newCardMapPush, next.territoryMap);
-          next = { ...next, cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1, selectedCardId: undefined, undoSnapshot: snapshot, comboState: newComboStatePush, comboFeedback: comboFeedbackPush, cardMap: newCardMapPush, activeSynergies: newSynergiesPush };
-          return set(() => endTurnIfNeeded(next));
-        }
-        if (selected.skill.kind === "stormCut") {
-          const snapshot = makeUndoSnapshot(s);
-          let next = applyMove(s, { kind: "skillStormCut", caster: ps.faction, center: cell, radius: 1, fromCardId: selected.id });
-          // Combo tracking
-          const newComboStateStorm: ComboState = {
-            ...s.comboState,
-            playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
-            playedCardTypes: [...s.comboState.playedCardTypes, "skill"],
-          };
-          const comboResultStorm = evaluateCombo(newComboStateStorm);
-          let comboFeedbackStorm: ComboFeedback | undefined;
-          if (comboResultStorm) {
-            newComboStateStorm.comboCount = s.comboState.comboCount + 1;
-            newComboStateStorm.totalCombosThisGame = (s.comboState.totalCombosThisGame ?? 0) + 1;
-            if (comboResultStorm.energyBonus > 0) {
-              next = { ...next, human: { ...next.human, energy: Math.min(10, next.human.energy + comboResultStorm.energyBonus) } };
-              newComboStateStorm.energyGranted = s.comboState.energyGranted + comboResultStorm.energyBonus;
-            }
-            comboFeedbackStorm = { kind: comboResultStorm.kind, label: comboResultStorm.label, nonce: Date.now() + Math.random() };
-          }
-          const newCardMapStorm = buildCardMap(next.board, next.human, next.ai, s.cardMap);
-          const newSynergiesStorm = recomputeSynergies(next.board, newCardMapStorm, next.territoryMap);
-          next = { ...next, cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1, selectedCardId: undefined, undoSnapshot: snapshot, comboState: newComboStateStorm, comboFeedback: comboFeedbackStorm, cardMap: newCardMapStorm, activeSynergies: newSynergiesStorm };
-          return set(() => endTurnIfNeeded(next));
-        }
-
-        // Generic fallback for any other skill in the new library
+        const sClean = { ...s, targetSelection: undefined };
         const snapshot = makeUndoSnapshot(s);
-        let nextState = applyMove(s, { kind: "pass" }); // dummy move to progress state
-        nextState = {
-           ...nextState,
-           human: { ...nextState.human, energy: nextState.human.energy - selected.cost }
-        };
-        const actionText = selected.ability?.action || "";
-        const isPassive = actionText.includes("ไม่มี") || actionText.includes("Passive") || actionText.includes("Auto Action") || actionText.includes("Auto Strike");
-        const needsTarget = selected.tier !== "basic" && !isPassive;
 
-        if (needsTarget) {
-          nextState.targetSelection = {
-            cardId: selected.id,
-            templateId: selected.comboType ?? selected.id,
-            step: 1,
-            maxSteps: 1,
-            selectedCoords: [cell] // Skill origin cell
-          };
-          nextState.message = setMessage(`🎯 โปรดเลือกเป้าหมาย: ${actionText}`);
-          return set(() => {
-             nextState.cardsPlayedThisTurn += 1;
-             nextState.selectedCardId = undefined;
-             nextState.undoSnapshot = snapshot;
-             return nextState;
-          });
+        // Combo tracking
+        const newComboState: ComboState = {
+           ...s.comboState, 
+           playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
+           playedCardTypes: [...s.comboState.playedCardTypes, "skill" as const],
+        };
+        const comboResult = evaluateCombo(newComboState);
+        let comboFeedback: ComboFeedback | undefined;
+        if (comboResult) {
+           newComboState.comboCount++; 
+           newComboState.totalCombosThisGame = (newComboState.totalCombosThisGame ?? 0) + 1;
+           if (comboResult.energyBonus > 0) {
+             comboFeedback = { kind: comboResult.kind, label: comboResult.label, nonce: Date.now() + Math.random() };
+           }
+           if (comboResult.strongerSkill) newComboState.strongerSkillActive = true;
         }
+
+        // Skill instant execution
+        const nextBoard = applyCardEffect(sClean.board, selected.comboType ?? selected.id, [cell], ps.faction); 
+        
+        // Manual hand/energy management
+        const newHand = ps.hand.filter(c => c.id !== selected.id);
+        const newDiscard = [selected, ...ps.discard];
+        let newEnergy = ps.energy - selected.cost;
+        if (comboResult?.energyBonus) newEnergy = Math.min(10, newEnergy + comboResult.energyBonus);
+
+        let next = { 
+          ...sClean, 
+          board: nextBoard,
+          human: { ...ps, hand: newHand, discard: newDiscard, energy: newEnergy }
+        };
+
+        const { scores, territoryMap } = recompute(next.board, next.human, next.ai);
+        next.scores = scores; next.territoryMap = territoryMap;
+        next.cardMap = buildCardMap(next.board, next.human, next.ai, next.cardMap);
+        next.activeSynergies = recomputeSynergies(next.board, next.cardMap, next.territoryMap);
+
+        if (selected.ability) {
+           next.message = setMessage(`✨ ${selected.name}: ${selected.ability.result}`);
+           next.activeEffect = {
+             cardName: selected.name, icon: selected.icon || "", type: selected.type,
+             action: selected.ability.action, result: selected.ability.result,
+           };
+        }
+        next.cardsPlayedThisTurn += 1;
+        next.selectedCardId = undefined;
+        next.undoSnapshot = snapshot;
+        next.comboState = newComboState;
+        next.comboFeedback = comboFeedback;
+        return set(() => endTurnIfNeeded(next));
       }
     },
 
@@ -1390,18 +1298,44 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       if (!s.targetSelection) return;
       
       const ts = s.targetSelection;
-      if (ts.selectedCoords.length - 1 < ts.maxSteps) {
+      
+      const isSkill = !ts.selectedCoords[0] || (ts.maxSteps > 0 && ts.selectedCoords.length === 0);
+      const expectedSteps = isSkill ? ts.maxSteps : ts.maxSteps + 1; // if unit, index 0 is placement
+      if (ts.selectedCoords.length < expectedSteps) {
          return set((st) => ({ ...st, message: setMessage("กรุณาเลือกเป้าหมายให้ครบ", "warn") }));
       }
       
-      const handCard = s.undoSnapshot?.human.hand.find(c => c.comboType === ts.templateId || c.id === ts.templateId) || { ability: { result: "ใช้สกิลสำเร็จ!" }};
+      const handCard = s.undoSnapshot?.human.hand.find(c => c.comboType === ts.templateId || c.id === ts.templateId) || s.human.hand.find(c => c.id === ts.cardId);
+      
+      // Apply actual board logic
+      const newBoard = applyCardEffect(s.board, ts.templateId, ts.selectedCoords, s.human.faction);
       
       // Clear target mode and proceed to end turn
-      let nextState = { ...s, targetSelection: undefined };
-      nextState.message = setMessage(`💥 ${handCard.ability?.result || "อานุภาพสำแดงผล!"}`);
+      let nextState = { ...s, targetSelection: undefined, board: newBoard };
+      
+      const { scores, territoryMap } = recompute(newBoard, nextState.human, nextState.ai);
+      nextState.scores = scores;
+      nextState.territoryMap = territoryMap;
+      
+      const newCardMap = buildCardMap(newBoard, nextState.human, nextState.ai, nextState.cardMap);
+      nextState.cardMap = newCardMap;
+      nextState.activeSynergies = recomputeSynergies(newBoard, newCardMap, territoryMap);
+
+      nextState.message = setMessage(`💥 ${handCard?.ability?.result || "อานุภาพสำแดงผล!"}`);
+      if (handCard?.ability) {
+        nextState.activeEffect = {
+          cardName: handCard.name,
+          icon: handCard.icon || "",
+          type: handCard.type,
+          action: handCard.ability.action,
+          result: handCard.ability.result
+        };
+      }
       
       return set(() => endTurnIfNeeded(nextState));
     },
+
+    triggerActiveEffect: (payload) => set((s) => ({ ...s, activeEffect: payload })),
 
     tryPass: () => {
       const s = get();

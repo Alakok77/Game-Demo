@@ -4,9 +4,11 @@ export type Faction = "RAMA" | "LANKA";
 
 export type Coord = { r: number; c: number };
 
+export type StatusEffect = "damage" | "protected" | "buff" | "willDie";
+
 export type Tile =
   | { kind: "empty" }
-  | { kind: "unit"; faction: Faction }
+  | { kind: "unit"; faction: Faction; templateId?: string; statusEffects?: StatusEffect[] }
   | { kind: "block"; expiresAtTurn: number; owner: Faction | null };
 
 export type Board = Tile[][];
@@ -29,6 +31,8 @@ export type EffectType =
 
 export type AbilityConfig = {
   trigger: string;
+  requiresTarget: boolean;
+  selectableTargets?: string;
   action: string;
   result: string;
   ui: string;
@@ -42,7 +46,7 @@ export type CardBase = {
   rarity: CardRarity;
   tier?: CardTier;
   description: string;
-  ability: AbilityConfig;
+  ability: AbilityConfig | null;
   icon?: string;
   image?: string;
   effectType?: EffectType;
@@ -137,6 +141,14 @@ export type PreviewResult = {
   ghost?: { at: Coord; faction: Faction };
 };
 
+export type ActiveEffectPayload = {
+  cardName: string;
+  icon: string;
+  type: string;
+  action: string;
+  result: string;
+};
+
 export type TurnPhase = "menu" | "tutorial" | "deckBuilder" | "player" | "aiThinking" | "gameOver";
 
 export type Settings = {
@@ -186,6 +198,7 @@ export type GameState = {
   hoverCell?: Coord;
   message?: { kind: "info" | "warn"; text: string; nonce: number };
   aiAnnounce?: { at: Coord; kind: "unit" | "skill"; nonce: number };
+  activeEffect?: ActiveEffectPayload;
   turnEnergyBonus: {
     HUMAN: { captureAwarded: boolean; territoryAwards: number };
     AI: { captureAwarded: boolean; territoryAwards: number };
@@ -209,6 +222,7 @@ export type GameState = {
     cardsPlayedThisTurn: number;
     selectedCardId?: string;
     hoverCell?: Coord;
+    activeEffect?: ActiveEffectPayload;
     turnEnergyBonus: {
       HUMAN: { captureAwarded: boolean; territoryAwards: number };
       AI: { captureAwarded: boolean; territoryAwards: number };

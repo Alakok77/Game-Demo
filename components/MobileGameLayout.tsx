@@ -7,6 +7,7 @@ import { Board } from "@/components/Board";
 import { MobileHand } from "@/components/MobileHand";
 import { useGameStore } from "@/store/gameStore";
 import { humanPlayerLabel, aiPlayerLabel } from "@/lib/factionUi";
+import { EffectBar } from "@/components/EffectBar";
 
 // ─── Compact contextual hint (Floating) ───────────────────────────────────────
 
@@ -96,6 +97,7 @@ export function MobileGameLayout() {
         overflow: "hidden",
       }}
     >
+      <EffectBar />
       {/* ══ 1. TOP BAR (COMPACT HEADER + ENERGY) ══════════════════════════════ */}
       <header className="flex flex-col bg-slate-900 border-b border-slate-800 z-20 flex-shrink-0 shadow-md">
         {/* Row 1: Scores and Turn */}
