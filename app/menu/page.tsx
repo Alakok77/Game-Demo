@@ -10,8 +10,8 @@ export default function MenuPage() {
     <div className="h-screen overflow-hidden bg-gradient-to-b from-slate-900 to-slate-800 p-4 text-white">
       <div className="mx-auto h-full w-full max-w-6xl">
         <Navigation />
-        <div className="flex h-[calc(100%-56px)] items-center justify-center pb-[env(safe-area-inset-bottom)]">
-          <div className="w-full max-w-md space-y-4 px-2 sm:px-0">
+        <div className="flex h-[calc(100%-56px)] flex-col items-center justify-start sm:justify-center overflow-y-auto pt-6 sm:pt-0 pb-[env(safe-area-inset-bottom,20px)]">
+          <div className="w-full max-w-md space-y-4 px-4 sm:px-0 mt-2 sm:mt-0">
             {/* Profile Panel */}
             <ProfilePanel />
 

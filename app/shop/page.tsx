@@ -258,11 +258,12 @@ export default function ShopPage() {
 
   return (
     <div className="h-[100dvh] bg-slate-950 p-2 md:p-4 pb-[env(safe-area-inset-bottom,8px)] text-slate-100 flex flex-col font-sans overflow-hidden">
-      <div className="mx-auto w-full max-w-6xl flex-1 flex flex-col min-h-0 relative">
+      <div className="mx-auto w-full max-w-6xl flex-1 flex flex-col min-h-0 relative pb-4">
         <Navigation />
 
-        {/* ── Header Mobile-First ── */}
-        <div className="mb-4 md:mb-6 rounded-2xl bg-slate-900 border border-slate-800 p-4 md:p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+          {/* ── Header Mobile-First ── */}
+          <div className="mb-4 mt-2 md:mb-6 rounded-2xl bg-slate-900 border border-slate-800 p-4 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
           <div>
             <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-indigo-300 to-purple-400 bg-clip-text text-transparent">🛒 พ่อค้าพเนจร</h1>
             <p className="text-xs md:text-sm text-slate-500 mt-1">แลกเปลี่ยนเหรียญทองแดงเพื่อครอบครองพลังแห่งทวยเทพ</p>
@@ -318,7 +319,7 @@ export default function ShopPage() {
               </div>
             </div>
 
-            {/* Pack Banner */}
+            {/* Pack Banner Desktop */}
             <motion.div 
               whileHover={{ scale: 1.02 }}
               className="mt-auto lg:mt-4 rounded-3xl bg-gradient-to-br from-indigo-900 to-purple-900 p-5 border border-indigo-500/40 shadow-2xl relative overflow-hidden hidden sm:block"
@@ -356,8 +357,8 @@ export default function ShopPage() {
           </button>
 
           {/* ── Main Shop Grid ── */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar pb-12 pr-2">
-            <div className="text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 px-2">
+          <div className="mt-4 px-1">
+            <div className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
               พบ {filteredCards.length} ใบ
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
@@ -380,7 +381,7 @@ export default function ShopPage() {
             </div>
             
             {filteredCards.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-500 text-sm">
+              <div className="flex flex-col items-center justify-center py-16 sm:py-20 text-slate-500 text-sm">
                 <div className="text-4xl mb-4 opacity-50">🪹</div>
                 ไม่มีการ์ดในหมวดหมู่นี้
               </div>
