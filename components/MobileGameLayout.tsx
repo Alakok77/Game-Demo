@@ -30,11 +30,11 @@ function MobileHint({
       {hint && (
         <motion.div
           key={hint.text}
-          initial={{ opacity: 0, scale: 0.9, y: 10 }}
+          initial={{ opacity: 0, scale: 0.9, y: -10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 10 }}
+          exit={{ opacity: 0, scale: 0.9, y: -10 }}
           transition={{ duration: 0.2 }}
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-indigo-950/95 border border-indigo-500/50 px-4 py-1.5 text-xs font-bold text-indigo-200 shadow-xl backdrop-blur-md whitespace-nowrap z-30"
+          className="flex items-center gap-1.5 rounded-full bg-indigo-950/95 border border-indigo-500/50 px-4 py-1.5 text-xs font-bold text-indigo-200 shadow-xl backdrop-blur-md whitespace-nowrap pointer-events-auto"
         >
           <span>{hint.text}</span>
           {cardsLeft > 0 && (
@@ -192,18 +192,16 @@ export function MobileGameLayout() {
       )}
 
       {/* ══ 3. BOARD (MAIN FOCUS) ═══════════════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col items-center justify-center p-0 min-h-0 overflow-hidden relative">
-        <MobileHint isMyTurn={isMyTurn} hasCardSelected={!!selectedCardId} cardsLeft={cardsLeft} />
+      <div className="flex-1 w-full overflow-y-auto overflow-x-hidden min-h-0 relative pb-8 pt-2">
+        {/* Sticky Mobile Hint */}
+        <div className="w-full flex justify-center sticky top-1 z-30 h-0 overflow-visible pointer-events-none drop-shadow-md">
+          <MobileHint isMyTurn={isMyTurn} hasCardSelected={!!selectedCardId} cardsLeft={cardsLeft} />
+        </div>
 
         {/* Full width board container */}
-        <div
-          className="w-full flex-shrink-0 flex items-center justify-center"
-          style={{
-            maxHeight: "65vh", // Maximum height allowed so we don't crunch action bar
-          }}
-        >
-          {/* Constrain board to a square max 100% width or available height */}
-          <div className="w-full max-w-[100vw] aspect-square p-1" style={{ maxHeight: "100%" }}>
+        <div className="w-full flex-shrink-0 flex items-center justify-center pointer-events-auto">
+          {/* Unconstrained square board to prevent squishing and ensure playability */}
+          <div className="w-full max-w-[600px] aspect-square p-1 mt-6">
             <Board compact={true} />
           </div>
         </div>
