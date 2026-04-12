@@ -27,7 +27,15 @@ import {
 } from "@/game/logic";
 import { computeScore, emptyTerritoryMap } from "@/game/territory";
 import { aiChooseMove } from "@/game/ai";
-import { buildDefaultDeckTemplateIds, CARD_LIBRARY, DECK_SIZE, instantiateDeck } from "@/data/cards";
+import {
+  CARD_LIBRARY,
+  validateDeckOwnership,
+  instantiateDeck,
+  buildDefaultDeckTemplateIds,
+  DECK_SIZE,
+} from "@/data/cards";
+import { generateRandomDeck } from "@/lib/randomDeck";
+import { loadProfile } from "@/progression/progression";
 import {
   checkAllSynergies,
   flattenSynergyCells,
@@ -937,11 +945,24 @@ function startOfTurn(state: GameState, who: Player): GameState {
 const BOARD_SIZE = 7;
 
 export const useGameStore = create<GameState & Actions>((set, get) => {
-  const fresh = (playerFaction: Faction): GameState => {
+  const fresh = (playerFaction: Faction, settingsOverride?: { aiLevel: 1 | 2 | 3 }): GameState => {
+    const profile = loadProfile();
+    const ownedIds = profile.ownedCardTemplateIds || [];
+
     const custom = loadCustomDeckIds(playerFaction);
-    const customOk = custom ? validateDeckTemplateIds(custom, playerFaction).ok : false;
-    const human = initPlayer(playerFaction, customOk ? custom : undefined);
-    const ai = initPlayer(otherFaction(playerFaction));
+    let deck = custom ? custom : buildDefaultDeckTemplateIds(playerFaction, ownedIds);
+    deck = validateDeckOwnership(deck, playerFaction, ownedIds);
+    const human = initPlayer(playerFaction, deck);
+
+    // AI gets a fresh random deck every game.
+    // In Hard mode, AI gets access to all cards for maximum challenge.
+    // Otherwise, AI is restricted to the player's owned cards for fairness.
+    const aiLevelForDeck = settingsOverride?.aiLevel ?? 2;
+    const aiFaction = otherFaction(playerFaction);
+    const aiOwnedIds = aiLevelForDeck >= 3 ? CARD_LIBRARY.map(c => c.templateId) : ownedIds;
+    const aiRandomDeck = generateRandomDeck(aiFaction, aiOwnedIds, Date.now());
+    
+    const ai = initPlayer(aiFaction, aiRandomDeck.ids);
     const board = makeEmptyBoard(BOARD_SIZE);
     const rec = recompute(board, human, ai);
     const emptyCardMap = new Map<string, CellCardInfo>();
@@ -998,6 +1019,8 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         hand: cur.ai.hand,
         energy: cur.ai.energy,
         captures: cur.scores.captures as Record<Faction, number>,
+        // Pass last AI move coord for anti-repeat logic
+        lastMoveCoord: cur.lastMove && cur.lastMove.kind === "playUnit" ? `${cur.lastMove.at.r},${cur.lastMove.at.c}` : undefined,
       };
       const move = aiChooseMove(aiInput);
       let announceAt: Coord | undefined;
@@ -1061,7 +1084,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
     startGame: () =>
       set(() => {
         const pf = get().playerFaction ?? "RAMA";
-        const s = fresh(pf);
+        const s = fresh(pf, get().settings);
         const started = startOfTurn({ ...s, phase: "player", active: "HUMAN" }, "HUMAN");
         const text = hasPlayableCard(started.human)
           ? "ตาของคุณ (+2 พลังงาน) เลือกการ์ดแล้ววางบนกระดาน"

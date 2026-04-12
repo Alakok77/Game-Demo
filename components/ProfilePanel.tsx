@@ -70,7 +70,7 @@ export function ProfilePanel({ profile: profileProp, compact = false }: Props) {
     );
   }
 
-  const { level, exp, gold, name } = profile;
+  const { level, exp, coins, name } = profile;
   const prog = expProgress(profile.totalExp);
 
   if (compact) {
@@ -80,7 +80,7 @@ export function ProfilePanel({ profile: profileProp, compact = false }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-white truncate">{name}</span>
-            <span className="text-yellow-300 font-semibold ml-2 shrink-0">🪙 {gold}</span>
+            <span className="text-yellow-300 font-semibold ml-2 shrink-0">🪙 {coins}</span>
           </div>
           <ExpBar current={prog.current} needed={prog.needed} />
           <div className="mt-0.5 text-[10px] text-slate-400">
@@ -104,7 +104,7 @@ export function ProfilePanel({ profile: profileProp, compact = false }: Props) {
             </div>
             <div className="flex items-center gap-1.5 rounded-xl bg-yellow-500/15 border border-yellow-500/30 px-3 py-1.5">
               <span className="text-xl">🪙</span>
-              <span className="text-lg font-bold text-yellow-300">{gold.toLocaleString()}</span>
+              <span className="text-lg font-bold text-yellow-300">{coins.toLocaleString()}</span>
             </div>
           </div>
           {/* EXP row */}

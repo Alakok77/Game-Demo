@@ -8,6 +8,13 @@ import { readStoredCustomDeckTemplateIds, useGameStore } from "@/store/gameStore
 import { loadProfile } from "@/progression/progression";
 import { unlockLevelHint } from "@/progression/rewards";
 import type { Faction } from "@/game/types";
+import {
+  generateRandomDeck,
+  varianceLabel,
+  varianceBg,
+  type RandomDeckResult,
+} from "@/lib/randomDeck";
+import { validateDeckOwnership } from "@/data/cards";
 
 
 type FilterType    = "all" | "basic" | "hero" | "legendary";
@@ -326,18 +333,23 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
   const [deckIds,       setDeckIds]       = React.useState<string[]>([]);
   const [warn,          setWarn]          = React.useState<{ text: string; kind: "ok" | "err" } | null>(null);
   const [playerLevel,   setPlayerLevel]   = React.useState<number>(1);
+  const [ownedIds,      setOwnedIds]      = React.useState<string[]>([]);
   const [modalCard,     setModalCard]     = React.useState<CardTemplate | null>(null);
   const [activeSection, setActiveSection] = React.useState<"deck" | "library">("deck");
 
-  React.useEffect(() => {
-    const parsed = readStoredCustomDeckTemplateIds(playerFaction);
-    setDeckIds(parsed && parsed.length ? parsed : buildDefaultDeckTemplateIds(playerFaction));
-  }, [playerFaction]);
+  // ── Random deck state ──────────────────────────────────────────────────────
+  const [randomResult,  setRandomResult]  = React.useState<RandomDeckResult | null>(null);
 
   React.useEffect(() => {
     const profile = loadProfile();
     setPlayerLevel(profile.level);
-  }, []);
+    const owned = profile.ownedCardTemplateIds || [];
+    setOwnedIds(owned);
+
+    const parsed = readStoredCustomDeckTemplateIds(playerFaction);
+    const rawDeck = parsed && parsed.length ? parsed : buildDefaultDeckTemplateIds(playerFaction, owned);
+    setDeckIds(validateDeckOwnership(rawDeck, playerFaction, owned));
+  }, [playerFaction]);
 
   // Lock body scroll
   React.useEffect(() => {
@@ -373,7 +385,7 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
     const card = CARD_LIBRARY.find((c) => c.templateId === templateId);
     if (!card) return "ไม่พบการ์ด";
     if (!(card.cardFaction === playerFaction || card.cardFaction === "NEUTRAL")) return "ไม่ใช่การ์ดฝ่ายนี้";
-    if (card.unlockLevel > playerLevel) return `ปลดล็อกที่เลเวล ${card.unlockLevel}`;
+    if (!ownedIds.includes(templateId)) return "ยังไม่ได้ซื้อ";
     const current = source.filter((id) => id === templateId).length;
     const maxDup  = card.tier === "basic" ? 4 : card.tier === "hero" ? 2 : 1;
     if (current >= maxDup) return "เพิ่มได้สูงสุดแล้ว";
@@ -398,6 +410,27 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
     if (!result.ok) { setWarn({ text: result.reason ?? "บันทึกไม่สำเร็จ", kind: "err" }); return; }
     setWarn({ text: "💾 บันทึกเด็คสำเร็จ!", kind: "ok" });
   };
+
+  // ── Random deck handlers ───────────────────────────────────────────────────
+  const rollRandomDeck = () => {
+    const result = generateRandomDeck(playerFaction, ownedIds, Date.now());
+    setRandomResult(result);
+  };
+
+  const rerollRandomDeck = () => {
+    const result = generateRandomDeck(playerFaction, ownedIds, Date.now());
+    setRandomResult(result);
+  };
+
+  const acceptRandomDeck = () => {
+    if (!randomResult) return;
+    setDeckIds(randomResult.ids);
+    setRandomResult(null);
+    setActiveSection("deck");
+    setWarn({ text: `🎲 เด็ค ${randomResult.archetype.nameThai} ${randomResult.archetype.emoji} พร้อมแล้ว!`, kind: "ok" });
+  };
+
+  const dismissRandomDeck = () => setRandomResult(null);
 
   const filteredCards = CARD_LIBRARY.filter((c) => {
     if (filterType    !== "all" && c.tier         !== filterType)    return false;
@@ -598,8 +631,8 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
             {/* Card list */}
             <div className="flex flex-col gap-2">
               {filteredCards.map((c) => {
-                const locked   = c.unlockLevel > playerLevel;
-                const lockHint = locked ? unlockLevelHint(c.unlockLevel) : undefined;
+                const locked   = !ownedIds.includes(c.templateId);
+                const lockHint = locked ? "ยังไม่ได้ซื้อ" : undefined;
                 const inDeck   = counts.get(c.templateId) ?? 0;
                 const reason   = validateCanAdd(c.templateId);
                 return (
@@ -648,6 +681,103 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
           )}
         </AnimatePresence>
 
+        {/* ── Random Deck Preview Panel ───────────────────────────────────── */}
+        <AnimatePresence>
+          {randomResult && (
+            <motion.div
+              key="random-preview"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="mb-3 rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-950/60 to-slate-900/80 overflow-hidden"
+            >
+              {/* Top accent bar */}
+              <div className="h-[2px] w-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500" />
+
+              <div className="px-4 py-3 space-y-2.5">
+                {/* Archetype title */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl leading-none">{randomResult.archetype.emoji}</span>
+                    <div>
+                      <div className="text-xs text-amber-400 font-bold uppercase tracking-widest">เด็คแบบ</div>
+                      <div className="text-base font-black text-white leading-tight">
+                        {randomResult.archetype.nameThai}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className={[
+                      "text-[10px] font-bold px-2.5 py-1 rounded-full border",
+                      varianceBg(randomResult.variance),
+                    ].join(" ")}
+                  >
+                    {varianceLabel(randomResult.variance)}
+                  </span>
+                </div>
+
+                {/* Card composition stats */}
+                <div className="flex items-center gap-3 text-[11px]">
+                  {(() => {
+                    const previewCards = randomResult.ids.map((id) =>
+                      CARD_LIBRARY.find((c) => c.templateId === id)
+                    ).filter(Boolean);
+                    const b = previewCards.filter((c) => c!.tier === "basic").length;
+                    const h = previewCards.filter((c) => c!.tier === "hero").length;
+                    const l = previewCards.filter((c) => c!.tier === "legendary").length;
+                    const lc = previewCards.filter((c) => c!.cost <= 2).length;
+                    return (
+                      <>
+                        <span className="text-slate-400">พื้นฐาน <span className="text-white font-bold">{b}</span></span>
+                        <span className="text-slate-700">•</span>
+                        <span className="text-slate-400">ฮีโร่ <span className="text-yellow-300 font-bold">{h}</span></span>
+                        <span className="text-slate-700">•</span>
+                        <span className="text-slate-400">ตำนาน <span className="text-purple-300 font-bold">{l}</span></span>
+                        <span className="text-slate-700">•</span>
+                        <span className="text-slate-400">ราคาถูก <span className="text-emerald-300 font-bold">{lc}</span></span>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={dismissRandomDeck}
+                    className="flex-none px-3.5 py-2.5 rounded-xl bg-slate-700/80 border border-slate-600/50 text-slate-300 text-xs font-bold active:scale-95 transition-transform"
+                  >
+                    ✕
+                  </button>
+                  <button
+                    onClick={rerollRandomDeck}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 border bg-amber-700/60 border-amber-600/50 text-amber-200"
+                  >
+                    🎲 สุ่มใหม่
+                  </button>
+                  <button
+                    onClick={acceptRandomDeck}
+                    className="flex-[1.5] py-2.5 rounded-xl bg-amber-500 text-slate-900 text-xs font-black active:scale-95 transition-transform shadow-[0_0_16px_rgba(245,158,11,0.4)]"
+                  >
+                    ✅ ใช้เด็คนี้
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Existing action buttons ─────────────────────────────────────── */}
+
+        {/* Random deck button — full width */}
+        <button
+          onClick={rollRandomDeck}
+          className="w-full mb-2 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 text-slate-900 text-xs font-black active:scale-95 transition-transform shadow-[0_0_18px_rgba(245,158,11,0.35)] flex items-center justify-center gap-2"
+        >
+          <span className="text-base">🎲</span>
+          <span>สุ่มเด็ค</span>
+        </button>
+
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => { if (!window.confirm("ลบเด็คทั้งหมด?")) return; setDeckIds([]); setWarn({ text: "🗑 ลบเด็คแล้ว", kind: "ok" }); }}
@@ -656,7 +786,7 @@ export function MobileDeckBuilder({ onBack }: { onBack?: () => void }) {
             🔥 ล้างเด็ค
           </button>
           <button
-            onClick={() => { setDeckIds(buildDefaultDeckTemplateIds(playerFaction)); setWarn({ text: "🤖 จัดเด็คอัตโนมัติ", kind: "ok" }); }}
+            onClick={() => { setDeckIds(buildDefaultDeckTemplateIds(playerFaction, ownedIds)); setWarn({ text: "🤖 จัดเด็คอัตโนมัติ", kind: "ok" }); }}
             className="py-3 rounded-xl bg-indigo-700/80 border border-indigo-600/50 text-white text-xs font-bold active:scale-95 transition-transform"
           >
             🤖 อัตโนมัติ

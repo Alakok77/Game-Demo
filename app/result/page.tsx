@@ -11,7 +11,7 @@ import {
   loadProfile,
   saveProfile,
   calcMatchExp,
-  calcMatchGold,
+  calcMatchCoins,
   applyMatchRewards,
   expProgress,
   type LevelUpResult,
@@ -86,7 +86,7 @@ export default function ResultPage() {
 
   // Progression state
   const [expResult, setExpResult] = useState<MatchExpResult | null>(null);
-  const [goldGained, setGoldGained] = useState(0);
+  const [coinsGained, setCoinsGained] = useState(0);
   const [oldProfile, setOldProfile] = useState<PlayerProfile | null>(null);
   const [newProfile, setNewProfile] = useState<PlayerProfile | null>(null);
   const [levelUps, setLevelUps] = useState<LevelUpResult[]>([]);
@@ -114,14 +114,14 @@ export default function ResultPage() {
       territory: scores.territory[human.faction],
       comboCount: comboState?.totalCombosThisGame ?? 0,
     });
-    const gold = calcMatchGold(winner === "win");
+    const coins = calcMatchCoins(winner === "win", comboState?.totalCombosThisGame ?? 0);
 
-    const { newProfile, levelUps } = applyMatchRewards(profile, expCalc.total, gold, getRewardsForLevel);
+    const { newProfile, levelUps } = applyMatchRewards(profile, expCalc.total, coins, getRewardsForLevel);
 
     setOldProfile(profile);
     setNewProfile(newProfile);
     setExpResult(expCalc);
-    setGoldGained(gold);
+    setCoinsGained(coins);
     setLevelUps(levelUps);
     saveProfile(newProfile);
 
@@ -248,8 +248,8 @@ export default function ResultPage() {
               </div>
 
               <div className="mt-2 flex items-center justify-between">
-                <div className="text-sm text-slate-400">Gold ที่ได้รับ</div>
-                <div className="text-lg font-bold text-yellow-300">🪙 +{goldGained}</div>
+                <div className="text-sm text-slate-400">เหรียญที่ได้รับ</div>
+                <div className="text-lg font-bold text-yellow-300">🪙 +{coinsGained}</div>
               </div>
 
               {/* EXP progress bar */}
@@ -274,8 +274,8 @@ export default function ResultPage() {
 
               {/* Gold total */}
               <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-800/60 px-3 py-2 text-xs text-slate-400">
-                <span>Gold สะสม</span>
-                <span className="font-bold text-yellow-300">🪙 {newProfile.gold.toLocaleString()}</span>
+                <span>เหรียญสะสมรวม</span>
+                <span className="font-bold text-yellow-300">🪙 {newProfile.coins.toLocaleString()}</span>
               </div>
             </motion.div>
           )}
@@ -285,13 +285,19 @@ export default function ResultPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="flex flex-wrap gap-3"
+            className="flex flex-wrap gap-2"
           >
             <button
               onClick={() => router.push("/select-faction")}
-              className="flex-1 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg hover:brightness-110 transition"
+              className="flex-1 min-w-[140px] rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg hover:brightness-110 transition"
             >
               🔄 เล่นใหม่
+            </button>
+            <button
+              onClick={() => router.push("/shop")}
+              className="flex-1 min-w-[140px] rounded-2xl bg-slate-700 hover:bg-slate-600 px-5 py-3 font-bold text-white transition flex items-center justify-center gap-1"
+            >
+              🛒 ไปร้านค้า
             </button>
             {levelUps.length > 0 && (
               <button

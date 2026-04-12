@@ -7,9 +7,9 @@
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Reward = {
-  kind: "card" | "gold";
+  kind: "card" | "coins";
   templateId?: string;   // for card rewards
-  amount?: number;       // for gold rewards
+  amount?: number;       // for coins rewards
   label: string;
   icon: string;
 };
@@ -26,9 +26,13 @@ export type PlayerProfile = {
   exp: number;
   /** Lifetime accumulated EXP — never decreases */
   totalExp: number;
-  gold: number;
-  /** templateIds the player has unlocked via rewards (beyond tier-unlock) */
+  coins: number;
+  /** templateIds the player has unlocked via rewards (legacy, kept for compat) */
   unlockedCardTemplateIds: string[];
+  /** templateIds the player actually owns (bought or granted) */
+  ownedCardTemplateIds: string[];
+  /** ISO date string of last daily reward claim */
+  lastDailyReward?: string;
 };
 
 export type MatchInput = {
@@ -88,14 +92,24 @@ export function calcMatchExp(input: MatchInput): MatchExpResult {
   return { base, captureBonus, territoryBonus, comboBonus, total: base + captureBonus + territoryBonus + comboBonus };
 }
 
-export function calcMatchGold(won: boolean): number {
-  return won ? 50 : 20;
+export function calcMatchCoins(won: boolean, comboCount: number = 0): number {
+  const base = won ? 100 : 50;
+  const comboBonus = Math.min(100, comboCount * 20);
+  return base + comboBonus;
 }
 
 // ─── Default Profile ──────────────────────────────────────────────────────────
 
 export function defaultProfile(): PlayerProfile {
-  return { name: "ผู้เล่น", level: 1, exp: 0, totalExp: 0, gold: 0, unlockedCardTemplateIds: [] };
+  return {
+    name: "ผู้เล่น",
+    level: 1,
+    exp: 0,
+    totalExp: 0,
+    coins: 0,
+    unlockedCardTemplateIds: [],
+    ownedCardTemplateIds: []
+  };
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
@@ -106,19 +120,49 @@ export function loadProfile(): PlayerProfile {
   if (typeof window === "undefined") return defaultProfile();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultProfile();
-    const p = JSON.parse(raw) as Partial<PlayerProfile>;
-    return {
+    if (!raw) return applyStarterPack(defaultProfile());
+    const p = JSON.parse(raw) as Partial<PlayerProfile & { gold: number }>;
+    
+    // Migrate gold -> coins
+    const coins = typeof p.coins === "number" ? p.coins : (typeof p.gold === "number" ? p.gold : 0);
+    
+    const profile: PlayerProfile = {
       name: p.name ?? "ผู้เล่น",
       level: p.level ?? 1,
       exp: p.exp ?? 0,
       totalExp: p.totalExp ?? 0,
-      gold: p.gold ?? 0,
+      coins,
       unlockedCardTemplateIds: p.unlockedCardTemplateIds ?? [],
+      ownedCardTemplateIds: p.ownedCardTemplateIds ?? [],
+      lastDailyReward: p.lastDailyReward,
     };
+    
+    return applyStarterPack(profile);
   } catch {
-    return defaultProfile();
+    return applyStarterPack(defaultProfile());
   }
+}
+
+/** 
+ * Grants starter cards if none are owned.
+ * Dynamically includes basic tier cards that unlock at level 1.
+ */
+function applyStarterPack(profile: PlayerProfile): PlayerProfile {
+  if (profile.ownedCardTemplateIds && profile.ownedCardTemplateIds.length > 0) {
+    return profile;
+  }
+  
+  // Standard starter pack template IDs for level 1 basics
+  const starterIds = [
+    "quick_monkey", "macaque_scout", "monkey_warrior", "macaque_guard", "monkey_archer",
+    "demon_soldier", "demon_guard", "demon_archer", "demon_warrior",
+    "move_skill", "cut_skill", "block_skill"
+  ];
+  
+  return {
+    ...profile,
+    ownedCardTemplateIds: Array.from(new Set([...(profile.ownedCardTemplateIds ?? []), ...starterIds]))
+  };
 }
 
 export function saveProfile(profile: PlayerProfile): void {
@@ -129,20 +173,20 @@ export function saveProfile(profile: PlayerProfile): void {
 // ─── Core Logic ───────────────────────────────────────────────────────────────
 
 /**
- * Apply EXP and gold gains to a profile.
+ * Apply EXP and coins gains to a profile.
  * Handles multi-level-up in a single call.
  * Returns the updated profile and an ordered list of level-up events.
  */
 export function applyMatchRewards(
   profile: PlayerProfile,
   expGain: number,
-  goldGain: number,
+  coinsGain: number,
   getRewards: (level: number) => Reward[],
 ): { newProfile: PlayerProfile; levelUps: LevelUpResult[] } {
-  let { name, level, exp, totalExp, gold, unlockedCardTemplateIds } = profile;
+  let { name, level, exp, totalExp, coins, unlockedCardTemplateIds, ownedCardTemplateIds, lastDailyReward } = profile;
   totalExp += expGain;
   exp += expGain;
-  gold += goldGain;
+  coins += coinsGain;
 
   const levelUps: LevelUpResult[] = [];
 
@@ -153,31 +197,93 @@ export function applyMatchRewards(
     for (const r of rewards) {
       if (r.kind === "card" && r.templateId && !unlockedCardTemplateIds.includes(r.templateId)) {
         unlockedCardTemplateIds = [...unlockedCardTemplateIds, r.templateId];
+        if (!ownedCardTemplateIds.includes(r.templateId)) {
+          ownedCardTemplateIds = [...ownedCardTemplateIds, r.templateId];
+        }
       }
-      if (r.kind === "gold" && r.amount) gold += r.amount;
+      if (r.kind === "coins" && r.amount) coins += r.amount;
     }
     levelUps.push({ newLevel: level, rewards });
   }
 
-  return { newProfile: { name, level, exp, totalExp, gold, unlockedCardTemplateIds }, levelUps };
+  return { newProfile: { name, level, exp, totalExp, coins, unlockedCardTemplateIds, ownedCardTemplateIds, lastDailyReward }, levelUps };
 }
 
 /**
  * Whether a card is accessible to the player.
- * - unlockLevel 1 → always accessible.
- * - Otherwise accessible if playerLevel >= unlockLevel.
+ * Now primarily governed by ownership in the shop system.
  */
-export function isCardAccessible(unlockLevel: number, playerLevel: number): boolean {
-  return playerLevel >= unlockLevel;
+export function isCardAccessible(templateId: string, ownedIds: string[]): boolean {
+  return ownedIds.includes(templateId);
 }
 
 /**
- * Returns all cards from a library that a player at `playerLevel` can use.
- * Import CARD_LIBRARY from data/cards at call site to avoid circular deps.
+ * Returns all cards from a library that a player owns.
  */
-export function getUnlockedCardIds(allTemplateIds: string[], unlockLevelMap: Map<string, number>, playerLevel: number): string[] {
-  return allTemplateIds.filter((id) => {
-    const lvl = unlockLevelMap.get(id) ?? 1;
-    return lvl <= playerLevel;
-  });
+export function getUnlockedCardIds(allTemplateIds: string[], ownedIds: string[]): string[] {
+  return allTemplateIds.filter((id) => ownedIds.includes(id));
+}
+
+// ─── Shop Actions ─────────────────────────────────────────────────────────────
+
+export function claimDailyReward(profile: PlayerProfile): { ok: boolean; newProfile: PlayerProfile; awarded: number } {
+  const today = new Date().toISOString().slice(0, 10);
+  if (profile.lastDailyReward === today) {
+    return { ok: false, newProfile: profile, awarded: 0 };
+  }
+  
+  return {
+    ok: true,
+    awarded: 200,
+    newProfile: {
+      ...profile,
+      coins: profile.coins + 200,
+      lastDailyReward: today
+    }
+  };
+}
+
+export function buyCard(profile: PlayerProfile, templateId: string, price: number): { ok: boolean; reason?: string; newProfile: PlayerProfile } {
+  if (profile.ownedCardTemplateIds.includes(templateId)) {
+    return { ok: false, reason: "มีแล้ว", newProfile: profile };
+  }
+  if (profile.coins < price) {
+    return { ok: false, reason: "เหรียญไม่พอ", newProfile: profile };
+  }
+  
+  return {
+    ok: true,
+    newProfile: {
+      ...profile,
+      coins: profile.coins - price,
+      ownedCardTemplateIds: [...profile.ownedCardTemplateIds, templateId]
+    }
+  };
+}
+
+export function buyRandomPack(profile: PlayerProfile, allCardIds: string[]): { ok: boolean; reason?: string; newProfile: PlayerProfile; received: string[] } {
+  const PRICE = 300;
+  if (profile.coins < PRICE) {
+    return { ok: false, reason: "เหรียญไม่พอ", newProfile: profile, received: [] };
+  }
+  
+  // Find unowned cards
+  const unowned = allCardIds.filter(id => !profile.ownedCardTemplateIds.includes(id));
+  if (unowned.length === 0) {
+    return { ok: false, reason: "คุณมีการ์ดครบทุกใบแล้ว", newProfile: profile, received: [] };
+  }
+  
+  // Pick up to 3 random unowned cards
+  const shuffled = [...unowned].sort(() => Math.random() - 0.5);
+  const received = shuffled.slice(0, Math.min(3, shuffled.length));
+  
+  return {
+    ok: true,
+    received,
+    newProfile: {
+      ...profile,
+      coins: profile.coins - PRICE,
+      ownedCardTemplateIds: [...profile.ownedCardTemplateIds, ...received]
+    }
+  };
 }
