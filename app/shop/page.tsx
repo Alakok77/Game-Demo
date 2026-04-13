@@ -15,7 +15,8 @@ import { CARD_LIBRARY, type CardTemplate } from "@/data/cards";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ─── Secret Code Constants ─────────────────────────────────────────────────────
-const SECRET_CODE = "yamaha";
+const CARD_CODE = "yamaha";
+const COIN_CODE = "susuki";
 const STARTER_IDS = [
   "quick_monkey", "macaque_scout", "monkey_warrior", "macaque_guard", "monkey_archer",
   "demon_soldier", "demon_guard", "demon_archer", "demon_warrior",
@@ -30,7 +31,7 @@ function SecretCodeModal({
   isUnlocked,
 }: {
   onClose: () => void;
-  onUnlock: () => void;
+  onUnlock: (code: string) => void;
   onReset: () => void;
   isUnlocked: boolean;
 }) {
@@ -42,9 +43,10 @@ function SecretCodeModal({
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   const handleSubmit = () => {
-    if (input.trim().toLowerCase() === SECRET_CODE) {
+    const cleaned = input.trim().toLowerCase();
+    if (cleaned === CARD_CODE || cleaned === COIN_CODE) {
       setSuccess(true);
-      onUnlock();
+      onUnlock(cleaned);
     } else {
       setShake(true);
       setInput("");
@@ -212,7 +214,7 @@ function SecretCodeInline({
   onReset,
   allUnlocked,
 }: {
-  onUnlock: () => void;
+  onUnlock: (code: string) => void;
   onReset: () => void;
   allUnlocked: boolean;
 }) {
@@ -221,10 +223,11 @@ function SecretCodeInline({
   const [success, setSuccess] = useState(false);
 
   const handleSubmit = () => {
-    if (input.trim().toLowerCase() === SECRET_CODE) {
+    const cleaned = input.trim().toLowerCase();
+    if (cleaned === CARD_CODE || cleaned === COIN_CODE) {
       setSuccess(true);
       setInput("");
-      onUnlock();
+      onUnlock(cleaned);
     } else {
       setShake(true);
       setInput("");
@@ -268,7 +271,7 @@ function SecretCodeInline({
             exit={{ opacity: 0 }}
             className="text-[10px] text-emerald-400 font-bold text-center"
           >
-            🎉 ปลดล็อคการ์ดทั้งหมดแล้ว!
+            🎉 {success === true ? "สำเร็จแล้ว!" : "โค้ดถูกต้อง!"}
           </motion.p>
         )}
       </AnimatePresence>
@@ -374,9 +377,22 @@ const CardVisualizer = ({
       </div>
 
       {/* Main Info */}
-      <div className="mb-4 z-10">
+      <div className="mb-3 z-10">
         <div className={`text-[10px] uppercase tracking-widest mb-0.5 ${tierColorText}`}>{tierLabel}</div>
         <h3 className="text-xl font-black text-white leading-tight">{card.name}</h3>
+      </div>
+
+      {/* Card Image */}
+      <div className="mb-4 flex justify-center h-20 items-center">
+        {card.image ? (
+          <img 
+            src={card.image} 
+            alt={card.name} 
+            className="h-full w-auto object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"
+          />
+        ) : (
+          <div className="text-4xl drop-shadow-lg">{card.icon}</div>
+        )}
       </div>
 
       {/* Structural Ability Block */}
@@ -457,12 +473,17 @@ export default function ShopPage() {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       keyBuffer.current += e.key.toLowerCase();
-      if (keyBuffer.current.length > SECRET_CODE.length) {
-        keyBuffer.current = keyBuffer.current.slice(-SECRET_CODE.length);
+      // Use the max length of codes or a safe buffer size
+      if (keyBuffer.current.length > 20) {
+        keyBuffer.current = keyBuffer.current.slice(-20);
       }
       if (keyTimer.current) clearTimeout(keyTimer.current);
       keyTimer.current = setTimeout(() => { keyBuffer.current = ""; }, 1500);
-      if (keyBuffer.current === SECRET_CODE) {
+
+      if (keyBuffer.current.endsWith(CARD_CODE)) {
+        keyBuffer.current = "";
+        setShowSecretModal(true);
+      } else if (keyBuffer.current.endsWith(COIN_CODE)) {
         keyBuffer.current = "";
         setShowSecretModal(true);
       }
@@ -482,22 +503,35 @@ export default function ShopPage() {
     }
   };
 
-  // Unlock all cards
-  const handleUnlockAll = () => {
+  // Master Unlock Handler
+  const handleSecretCode = (code: string) => {
     if (!profile) return;
-    const allIds = CARD_LIBRARY.map((c) => c.templateId);
-    const merged = Array.from(new Set([...profile.ownedCardTemplateIds, ...allIds]));
-    const newProfile: PlayerProfile = { ...profile, ownedCardTemplateIds: merged };
-    saveProfile(newProfile);
-    setProfile(newProfile);
-    setShowSecretModal(false);
-    setShowCelebration(true);
+    
+    if (code === CARD_CODE) {
+      const allIds = CARD_LIBRARY.map((c) => c.templateId);
+      const merged = Array.from(new Set([...profile.ownedCardTemplateIds, ...allIds]));
+      const newProfile: PlayerProfile = { ...profile, ownedCardTemplateIds: merged };
+      saveProfile(newProfile);
+      setProfile(newProfile);
+      setShowSecretModal(false);
+      setShowCelebration(true);
+    } else if (code === COIN_CODE) {
+      const newProfile: PlayerProfile = { ...profile, coins: 999999 };
+      saveProfile(newProfile);
+      setProfile(newProfile);
+      setShowSecretModal(false);
+      setShowCelebration(true);
+    }
   };
 
-  // Reset back to starter cards
-  const handleResetCards = () => {
+  // Reset back to starter cards & coins
+  const handleResetProfile = () => {
     if (!profile) return;
-    const newProfile: PlayerProfile = { ...profile, ownedCardTemplateIds: [...STARTER_IDS] };
+    const newProfile: PlayerProfile = { 
+      ...profile, 
+      ownedCardTemplateIds: [...STARTER_IDS],
+      coins: 0 
+    };
     saveProfile(newProfile);
     setProfile(newProfile);
   };
@@ -652,7 +686,7 @@ export default function ShopPage() {
             </div>
 
             {/* ── Secret Code Input Box ── */}
-            <SecretCodeInline onUnlock={handleUnlockAll} onReset={handleResetCards} allUnlocked={allUnlocked} />
+            <SecretCodeInline onUnlock={handleSecretCode} onReset={handleResetProfile} allUnlocked={allUnlocked || profile.coins > 10000} />
 
             {/* Pack Banner Desktop */}
             <motion.div 
@@ -715,9 +749,9 @@ export default function ShopPage() {
           {showSecretModal && (
             <SecretCodeModal
               onClose={() => setShowSecretModal(false)}
-              onUnlock={handleUnlockAll}
-              onReset={handleResetCards}
-              isUnlocked={allUnlocked}
+              onUnlock={handleSecretCode}
+              onReset={handleResetProfile}
+              isUnlocked={allUnlocked || profile.coins > 10000}
             />
           )}
         </AnimatePresence>
@@ -778,32 +812,65 @@ export default function ShopPage() {
                     🎉 ได้รับการ์ดใหม่!
                   </motion.div>
                   
-                  <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center justify-center w-full">
+                  <div className="flex flex-col md:flex-row gap-5 md:gap-8 items-center justify-center w-full max-h-[60vh] md:max-h-none overflow-y-auto md:overflow-visible px-4 py-4">
                     {packResult.map((card, i) => {
                       const isLeg = card.tier === "legendary";
+                      const role = getRoleInfo(card);
+                      const parsed = parseAbilityText(card);
+                      
                       return (
                         <motion.div
                           key={card.templateId}
                           initial={{ opacity: 0, scale: 0, rotateY: 180 }}
                           animate={{ opacity: 1, scale: 1, rotateY: 0 }}
                           transition={{ 
-                            delay: isLeg ? 1.5 + i * 0.2 : i * 0.2, // dramatic delay for legendary
+                            delay: isLeg ? 1.2 + i * 0.15 : i * 0.15,
                             type: "spring",
                             stiffness: 200,
                             damping: 20
                           }}
-                          className={`relative w-48 h-64 md:w-56 md:h-80 rounded-2xl p-1 ${isLeg ? 'bg-gradient-to-br from-yellow-300 via-yellow-600 to-yellow-900' : card.tier === 'hero' ? 'bg-gradient-to-br from-indigo-400 to-purple-600' : 'bg-slate-600'} shadow-[0_0_30px_rgba(0,0,0,0.5)]`}
+                          className={`relative w-full max-w-[240px] md:w-60 lg:w-64 h-[280px] md:h-96 rounded-3xl p-1 ${isLeg ? 'bg-gradient-to-br from-yellow-300 via-amber-500 to-yellow-800' : card.tier === 'hero' ? 'bg-gradient-to-br from-indigo-400 via-purple-600 to-indigo-800' : 'bg-slate-600'} shadow-[0_15px_40px_rgba(0,0,0,0.6)]`}
                         >
-                          <div className="absolute inset-0 rounded-2xl shadow-[inset_0_0_20px_rgba(255,255,255,0.2)] mix-blend-overlay pointer-events-none"></div>
-                          
-                          <div className="w-full h-full bg-slate-900 rounded-xl m-[2px] flex flex-col items-center justify-center p-4 text-center">
-                            <div className="text-6xl mb-4 drop-shadow-lg filter">
-                              {card.icon === "hero" ? "🦸" : card.icon === "legendary" ? "✨" : "🔥"}
-                            </div>
-                            <div className="text-xl font-bold text-white mb-2">{card.name}</div>
-                            <div className={`text-xs font-bold uppercase tracking-widest ${isLeg ? 'text-yellow-400' : card.tier === 'hero' ? 'text-purple-300' : 'text-slate-400'}`}>
-                              {card.tier}
-                            </div>
+                          {/* Inner Content */}
+                          <div className="w-full h-full bg-slate-950/90 rounded-[1.4rem] m-[1px] flex flex-col p-4 md:p-6 overflow-hidden relative border border-white/5">
+                             {/* Faction/Tier Header */}
+                             <div className="flex justify-between items-start mb-2 md:mb-4">
+                                <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-white/50">
+                                   {role.icon} {role.label}
+                                </div>
+                                <div className="flex h-6 w-6 md:h-8 md:w-8 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-red-600 border border-white/20 text-[10px] md:text-sm font-black text-white shadow-lg">
+                                  {card.cost}
+                                </div>
+                             </div>
+
+                             {/* Icon & Glow */}
+                             <div className="flex-1 flex flex-col items-center justify-center gap-1 md:gap-4 px-2">
+                                 <div className="relative">
+                                   {isLeg && <div className="absolute inset-x-[-30%] inset-y-[-30%] blur-2xl bg-indigo-500/30 rounded-full animate-pulse" />}
+                                   {card.image ? (
+                                     <img 
+                                       src={card.image} 
+                                       alt={card.name} 
+                                       className="h-20 md:h-28 w-auto object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.8)] relative z-10"
+                                     />
+                                   ) : (
+                                     <div className="text-5xl md:text-7xl drop-shadow-[0_8px_12px_rgba(0,0,0,0.8)] relative z-10">{card.icon ?? "🃏"}</div>
+                                   )}
+                                 </div>
+                                <div className="text-center">
+                                   <div className={`text-[8px] md:text-[10px] font-black uppercase tracking-widest ${isLeg ? 'text-yellow-400' : card.tier === 'hero' ? 'text-purple-400' : 'text-slate-400'}`}>
+                                      {card.tier}
+                                   </div>
+                                   <div className="text-lg md:text-2xl font-black text-white leading-tight drop-shadow-md">{card.name}</div>
+                                </div>
+                             </div>
+
+                             {/* Ability Summary */}
+                             <div className="mt-2 md:mt-4 pt-2 md:pt-4 border-t border-white/10 text-center">
+                                <div className="text-[9px] md:text-[11px] text-slate-300 font-medium leading-tight line-clamp-2">
+                                   {parsed.result || parsed.effect || "ไม่มีความสามารถพิเศษ"}
+                                </div>
+                             </div>
                           </div>
                         </motion.div>
                       );

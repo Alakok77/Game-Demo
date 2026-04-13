@@ -14,8 +14,8 @@ function cellBg(territoryOwner: "none" | Faction, humanFaction: Faction) {
   if (territoryOwner === "none") return "bg-slate-700";
   const isPlayer = territoryOwner === humanFaction;
   return isPlayer
-    ? "bg-blue-900/60"   // player territory — clearly blue
-    : "bg-red-900/55";   // enemy territory — clearly red
+    ? "bg-blue-950/40"   // player territory — more muted for contrast
+    : "bg-red-950/40";    // enemy territory — more muted for contrast
 }
 
 /** Strong coloured fill overlay on top of base bg */
@@ -23,8 +23,8 @@ function territoryFill(territoryOwner: "none" | Faction, humanFaction: Faction) 
   if (territoryOwner === "none") return null;
   const isPlayer = territoryOwner === humanFaction;
   return isPlayer
-    ? "bg-gradient-to-br from-blue-500/30 to-blue-700/20"
-    : "bg-gradient-to-br from-red-500/30 to-red-700/20";
+    ? "bg-gradient-to-br from-blue-600/10 to-blue-900/20"
+    : "bg-gradient-to-br from-red-600/10 to-red-900/20";
 }
 
 /** Outer border colour when cell is territory-owned */

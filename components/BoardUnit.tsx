@@ -49,19 +49,17 @@ export const BoardUnit: React.FC<BoardUnitProps> = ({
     <div
       className={`relative w-full h-full flex flex-col items-center justify-center transition-all duration-300 ${
         faction === "RAMA" 
-          ? "rounded-full bg-blue-900/60 border-blue-400/70 shadow-[0_0_15px_rgba(59,130,246,0.3)] bg-texture-rama ring-2 ring-blue-500/20" 
-          : "rounded-xl bg-red-950/70 border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.3)] bg-texture-lanka ring-2 ring-red-600/20"
+          ? "rounded-full bg-blue-600 border-2 border-blue-400/80 shadow-[inset_0_-2px_6px_rgba(0,0,0,0.3),0_4px_10px_rgba(37,99,235,0.4)] bg-texture-rama" 
+          : "rounded-xl bg-red-600 border-2 border-red-400/80 shadow-[inset_0_-2px_6px_rgba(0,0,0,0.3),0_4px_10px_rgba(220,38,38,0.4)] bg-texture-lanka"
       }`}
     >
       {/* Texture Filter Overlay */}
       <div className={`absolute inset-0 pointer-events-none opacity-40 ${
         faction === "RAMA" ? "rounded-full" : "rounded-xl"
       }`} />
-      {/* [ TOP LEFT ] Faction Indicator */}
-      <div className={`absolute flex items-center justify-center rounded-full text-[10px] shadow-sm ${
-        faction === "RAMA" ? "top-1.5 left-1.5 size-4" : "top-0.5 left-0.5 size-4"
-      } ${
-        isPlayer ? "bg-blue-600" : "bg-red-600"
+      {/* [ TOP LEFT ] Faction Indicator (Subtler) */}
+      <div className={`absolute flex items-center justify-center rounded-full text-[8px] bg-white/20 backdrop-blur-sm border border-white/30 ${
+        faction === "RAMA" ? "top-1.5 left-1.5 size-3.5" : "top-0.5 left-0.5 size-3.5"
       }`}>
         {isPlayer ? "🔵" : "🔴"}
       </div>
@@ -74,8 +72,16 @@ export const BoardUnit: React.FC<BoardUnitProps> = ({
       </div>
 
       {/* [ CENTER ] Character Icon */}
-      <div className={`relative flex items-center justify-center text-3xl sm:text-4xl select-none ${specialEffect}`}>
-         {icon}
+      <div className={`relative flex items-center justify-center select-none ${specialEffect}`}>
+         {card?.image ? (
+           <img 
+             src={card.image} 
+             alt={name} 
+             className="w-9 h-9 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-10" 
+           />
+         ) : (
+           <div className="text-xl sm:text-2xl drop-shadow-md z-10">{icon}</div>
+         )}
          {/* Special visual layers */}
          {specialEffect === "hanuman-wind" && (
            <div className="absolute inset-0 animate-spin-slow opacity-40 text-blue-200 pointer-events-none">🌀</div>

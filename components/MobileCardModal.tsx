@@ -86,9 +86,17 @@ export function MobileCardModal({
           <div className="flex items-center gap-4">
             <div className="relative">
               {card.tier === "legendary" && (
-                <div className="absolute inset-0 blur-lg bg-pink-500/40 rounded-full scale-[1.3]" />
+                <div className="absolute inset-0 blur-lg bg-indigo-500/40 rounded-full scale-[1.3]" />
               )}
-              <span className="text-[44px] leading-none drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)] relative z-10">{card.icon ?? "🃏"}</span>
+              {card.image ? (
+                <img 
+                  src={card.image} 
+                  alt={card.name} 
+                  className="h-11 w-auto object-contain drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)] relative z-10"
+                />
+              ) : (
+                <span className="text-[44px] leading-none drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)] relative z-10">{card.icon ?? "🃏"}</span>
+              )}
             </div>
             <div>
               <div className="text-xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-200 drop-shadow-md leading-tight">{card.name}</div>

@@ -191,6 +191,7 @@ function makeFallbackBasicCard(faction: Faction): UnitCard {
       animation: "ไม่มี"
     },
     icon: faction === "RAMA" ? "🐒" : "👹",
+    image: faction === "RAMA" ? "/RAMA_png/monkey-soldier.png" : "/LANKA_png/ยักษ์สมุน.png",
     effectType: "unit",
     unit: { faction },
   };
@@ -1029,8 +1030,17 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
     window.setTimeout(() => {
       const cur = get();
       if (cur.phase !== "aiThinking") return;
-      const aiInput = {
-        level: cur.settings.aiLevel,
+      const profile = loadProfile();
+      const stats = profile.stats;
+      const winRate = stats.matchesPlayed > 0 ? stats.matchesWon / stats.matchesPlayed : 0.5;
+      const comboRate = stats.matchesPlayed > 0 ? stats.totalCombos / stats.matchesPlayed : 0;
+      
+      const humanCards = cur.human.deck;
+      const avgTier = humanCards.reduce((acc, c) => acc + (c.tier === "legendary" ? 3 : c.tier === "hero" ? 2 : 1), 0) / Math.max(1, humanCards.length);
+      const deckPower = humanCards.reduce((acc, c) => acc + (c.tier === "legendary" ? 5 : c.tier === "hero" ? 3 : 1), 0);
+
+      const aiInput: AiInput = {
+        level: cur.settings.aiLevel as any,
         board: cur.board,
         turn: cur.turn,
         aiFaction: cur.ai.faction,
@@ -1038,7 +1048,13 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         hand: cur.ai.hand,
         energy: cur.ai.energy,
         captures: cur.scores.captures as Record<Faction, number>,
-        // Pass last AI move coord for anti-repeat logic
+        playerPowerMetrics: {
+          averageCardTier: avgTier,
+          totalDeckPower: deckPower,
+          winRate: winRate,
+          comboUsageRate: comboRate,
+          consecutiveCombos: cur.comboState.comboCount
+        },
         lastMoveCoord: cur.lastMove && cur.lastMove.kind === "playUnit" ? `${cur.lastMove.at.r},${cur.lastMove.at.c}` : undefined,
       };
       const move = aiChooseMove(aiInput);
@@ -1055,13 +1071,50 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         const cur2 = get();
         if (cur2.phase !== "aiThinking") return;
         const started = startOfTurn(cur2, "AI");
+        
+        // Before applyMove (which discards the card), find the card template
+        const playedCard = started.ai.hand.find(c => c.id === (move as any).fromCardId);
+        
         let after = applyMove(started, move);
+        
         // Track consecutive passes for the AI
         const aiPassed = move.kind === "pass";
         after = {
           ...after,
           consecutivePasses: aiPassed ? (after.consecutivePasses + 1) : 0,
         };
+
+        // NEW: Apply card abilities for AI if it wasn't a pass
+        if (playedCard && !aiPassed) {
+          const templateId = (playedCard as any).comboType ?? playedCard.id;
+          let coords: Coord[] = [];
+          if (move.kind === "playUnit" || move.kind === "skillBlockTile") coords = [move.at];
+          else if (move.kind === "skillDestroyWeakGroup") coords = [move.targetAnyCellInEnemyGroup];
+          else if (move.kind === "skillPushUnit") coords = [move.from];
+          else if (move.kind === "skillStormCut") coords = [move.center];
+
+          // Re-apply the effect (matches player's logic in tryPlayAt)
+          after.board = applyCardEffect(after.board, templateId, coords, after.ai.faction);
+          
+          // Re-sync all calculated state after board changed
+          const rec = recompute(after.board, after.human, after.ai);
+          after.scores = rec.scores;
+          after.territoryMap = rec.territoryMap;
+          after.cardMap = buildCardMap(after.board, after.human, after.ai, after.cardMap);
+          after.activeSynergies = recomputeSynergies(after.board, after.cardMap, after.territoryMap);
+
+          // Show active effect banner for AI
+          if (playedCard.ability) {
+             after.activeEffect = {
+               cardName: playedCard.name,
+               icon: playedCard.icon || "",
+               type: playedCard.type,
+               action: playedCard.ability.action,
+               result: playedCard.ability.result,
+             };
+          }
+        }
+
         after = endTurnIfNeeded(after);
         if (after.phase === "gameOver") return set(() => ({ ...after, aiAnnounce: undefined }));
         const back = startOfTurn({ ...after, active: "HUMAN", phase: "player", aiAnnounce: undefined }, "HUMAN");
@@ -1084,7 +1137,27 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
   if (typeof window !== "undefined") {
     const saved = loadData<GameState | null>("game_state", null);
     if (saved && saved.board && saved.phase) {
-      initialState = { ...defaultState, ...saved };
+      // Re-hydrate cards from library to ensure they have the new 'image' property
+      const patchPlayer = (ps: PlayerState) => {
+        const patchCard = (c: Card) => {
+          const tpl = CARD_LIBRARY.find(t => t.templateId === c.comboType || t.icon === c.icon || t.name === c.name);
+          if (tpl && !c.image) return { ...c, image: tpl.image };
+          return c;
+        };
+        return {
+          ...ps,
+          deck: ps.deck.map(patchCard),
+          hand: ps.hand.map(patchCard),
+          discard: ps.discard.map(patchCard),
+        };
+      };
+      
+      initialState = { 
+        ...defaultState, 
+        ...saved,
+        human: patchPlayer(saved.human),
+        ai: patchPlayer(saved.ai),
+      };
     }
   }
 

@@ -35,6 +35,13 @@ export type PlayerProfile = {
   ownedCardTemplateIds: string[];
   /** ISO date string of last daily reward claim */
   lastDailyReward?: string;
+  /** Lifetime stats for adaptive AI scaling */
+  stats: {
+    matchesPlayed: number;
+    matchesWon: number;
+    totalCombos: number;
+    totalCaptures: number;
+  };
 };
 
 export type MatchInput = {
@@ -110,7 +117,13 @@ export function defaultProfile(): PlayerProfile {
     totalExp: 0,
     coins: 0,
     unlockedCardTemplateIds: [],
-    ownedCardTemplateIds: []
+    ownedCardTemplateIds: [],
+    stats: {
+      matchesPlayed: 0,
+      matchesWon: 0,
+      totalCombos: 0,
+      totalCaptures: 0
+    }
   };
 }
 
@@ -148,6 +161,12 @@ export function loadProfile(): PlayerProfile {
       unlockedCardTemplateIds: p.unlockedCardTemplateIds ?? [],
       ownedCardTemplateIds: p.ownedCardTemplateIds ?? [],
       lastDailyReward: p.lastDailyReward,
+      stats: p.stats ?? {
+        matchesPlayed: 0,
+        matchesWon: 0,
+        totalCombos: 0,
+        totalCaptures: 0
+      }
     };
     
     return applyStarterPack(profile);
@@ -218,7 +237,22 @@ export function applyMatchRewards(
     levelUps.push({ newLevel: level, rewards });
   }
 
-  return { newProfile: { name, level, exp, totalExp, coins, unlockedCardTemplateIds, ownedCardTemplateIds, lastDailyReward }, levelUps };
+  return { newProfile: { name, level, exp, totalExp, coins, unlockedCardTemplateIds, ownedCardTemplateIds, lastDailyReward, stats: profile.stats }, levelUps };
+}
+
+/** 
+ * Update lifetime stats after a match.
+ */
+export function updateStats(profile: PlayerProfile, input: MatchInput): PlayerProfile {
+  return {
+    ...profile,
+    stats: {
+      matchesPlayed: profile.stats.matchesPlayed + 1,
+      matchesWon: profile.stats.matchesWon + (input.won ? 1 : 0),
+      totalCombos: profile.stats.totalCombos + (input.comboCount ?? 0),
+      totalCaptures: profile.stats.totalCaptures + input.captures
+    }
+  };
 }
 
 /**

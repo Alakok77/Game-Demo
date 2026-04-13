@@ -159,9 +159,16 @@ export default function GamePage() {
             turn >= 27 ? "text-red-400 animate-pulse" : turn >= 22 ? "text-amber-400" : "text-slate-500",
           ].join(" ")}>เทิร์น {turn} / 30</div>
           <div className={["text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5",
-            isMyTurn ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-800 text-slate-500",
+            isMyTurn ? "bg-emerald-500/15 text-emerald-400" : "bg-blue-500/15 text-blue-400",
           ].join(" ")}>
-            {isMyTurn ? "🎮 เทิร์นคุณ" : "🤖 AI กำลังคิด…"}
+            {isMyTurn ? "🎮 เทิร์นคุณ" : (
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                {turn < 5 ? "🤖 AI กำลังวางหมาก..." : turn < 15 ? "🤔 AI กำลังคำนวณแผน..." : "💭 AI กำลังเร่งปิดเกม..."}
+              </motion.span>
+            )}
           </div>
         </div>
 

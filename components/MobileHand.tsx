@@ -99,13 +99,13 @@ function MiniCard({
         {card.cost}
       </div>
 
-      {/* Info Button */}
+      {/* Info Button (Small circular) */}
       <div 
         onClick={handleInfoClick}
         onTouchEnd={handleInfoClick}
-        className="absolute top-2 left-2 p-1.5 bg-slate-950/60 hover:bg-slate-900 border border-white/20 rounded-full z-20 backdrop-blur-md shadow-lg transition-colors"
+        className="absolute top-1.5 left-1.5 size-7 flex items-center justify-center bg-slate-900/80 border border-white/20 rounded-full z-30 shadow-lg active:scale-90 transition-transform"
       >
-        <svg className="w-3.5 h-3.5 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg className="w-4 h-4 text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>
@@ -114,18 +114,35 @@ function MiniCard({
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pt-4 pointer-events-none z-10">
         <div className="relative">
           {card.tier === "legendary" && (
-            <div className="absolute inset-0 blur-lg bg-pink-500/50 rounded-full scale-[1.5]" />
+            <div className="absolute inset-x-[-50%] inset-y-[-50%] blur-xl bg-indigo-500/30 rounded-full animate-pulse" />
           )}
-          <div className="text-[42px] drop-shadow-[0_6px_8px_rgba(0,0,0,0.7)] relative z-10">{card.icon ?? "🃏"}</div>
+          {card.image ? (
+            <img 
+              src={card.image} 
+              alt={card.name} 
+              className="h-10 w-auto object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)] relative z-10"
+            />
+          ) : (
+            <div className="text-[34px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.7)] relative z-10">{card.icon ?? "🃏"}</div>
+          )}
         </div>
         
-        <div className="w-full px-1.5 mt-2 text-center text-[11px] font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] leading-tight">
+        <div className="w-full px-1.5 mt-1 text-center text-[11px] font-extrabold tracking-wide text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] leading-tight">
           {card.name}
+        </div>
+
+        {/* Ability Summary (More prominent) */}
+        <div className="w-full px-1.5 mt-1 mx-auto">
+           <div className="py-1 px-1.5 rounded-lg bg-black/60 border border-white/10 shadow-inner">
+             <span className="text-[10px] font-bold text-blue-100 leading-tight line-clamp-2 text-center block">
+                {card.ability?.result || (card.description.length > 25 ? card.description.slice(0, 22) + "..." : card.description)}
+             </span>
+           </div>
         </div>
         
         {/* Tier text strictly for hero/leg */}
         {card.tier !== "basic" && (
-          <div className="px-2 py-0.5 mt-0.5 rounded border border-white/10 bg-black/60 shadow-inner text-[8px] font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500">
+          <div className="px-2 py-0.5 mt-1.5 rounded border border-white/10 bg-black/60 shadow-inner text-[8px] font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500">
             {card.tier === "legendary" ? "LEGENDARY" : "HERO"}
           </div>
         )}

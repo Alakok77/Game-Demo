@@ -264,9 +264,17 @@ export function Card({
           <CostGem cost={card.cost} faction={faction} />
         </div>
 
-        {/* ── ICON + NAME ── */}
-        <div className="flex flex-col items-center px-3 py-2 text-center">
-          <div className="text-3xl leading-none drop-shadow-lg">{card.icon ?? "🃏"}</div>
+        {/* ── IMAGE / ICON ── */}
+        <div className="flex flex-col items-center px-3 py-2 text-center h-[60px] justify-center">
+          {card.image ? (
+            <img 
+              src={card.image} 
+              alt={card.name} 
+              className="h-14 w-auto object-contain drop-shadow-md"
+            />
+          ) : (
+            <div className="text-3xl leading-none drop-shadow-lg">{card.icon ?? "🃏"}</div>
+          )}
           <div className="mt-1.5 line-clamp-2 text-xs font-bold leading-tight text-white">
             {card.name}
           </div>

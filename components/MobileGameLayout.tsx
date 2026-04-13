@@ -116,9 +116,16 @@ export function MobileGameLayout() {
               เทิร์น {turn}/30
             </div>
             <div className={["text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 leading-none",
-              isMyTurn ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-500",
+              isMyTurn ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400",
             ].join(" ")}>
-              {isMyTurn ? "🎮 ตาคุณ" : "🤖 AI คิด…"}
+              {isMyTurn ? "🎮 ตาคุณ" : (
+                <motion.span
+                  animate={{ opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  {turn < 5 ? "🤖 AI วางหมาก..." : turn < 15 ? "🤔 AI รวมแผน..." : "💭 AI ปิดเกม..."}
+                </motion.span>
+              )}
             </div>
           </div>
 

@@ -30,8 +30,16 @@ import { computeScore } from "./territory";
 
 // ─── Public input type (unchanged) ───────────────────────────────────────────
 
+export type PlayerPowerMetrics = {
+  averageCardTier: number; // 1: basic, 2: hero, 3: legendary
+  totalDeckPower: number;   // sum of tiers or similar
+  winRate: number;         // 0.0 - 1.0
+  comboUsageRate: number;  // average combos per match
+  consecutiveCombos?: number; // current match info
+};
+
 export type AiInput = {
-  level: 1 | 2 | 3;
+  level: 1 | 2 | 3 | 4; // Now supports Level 4 (Supreme)
   board: Board;
   turn: number;
   aiFaction: Faction;
@@ -39,11 +47,35 @@ export type AiInput = {
   hand: Card[];
   energy: number;
   captures: Record<Faction, number>;
+  /** Optional meta-metrics for adaptive scaling */
+  playerPowerMetrics?: PlayerPowerMetrics;
   /** Optional: coord-string of the AI's previous move (for anti-repeat). */
   lastMoveCoord?: string;
 };
 
 // ─── Internals ────────────────────────────────────────────────────────────────
+
+/**
+ * Part 1: AI Level System (Dynamic)
+ * aiLevel = function(playerPower)
+ */
+export function calculateDynamicLevel(metrics: PlayerPowerMetrics): number {
+  const { averageCardTier, totalDeckPower, winRate, comboUsageRate, consecutiveCombos = 0 } = metrics;
+  
+  // Player Power Formula:
+  // Normalize factors (approximate weights)
+  const power = 
+    (averageCardTier * 2) + 
+    (totalDeckPower / 10) + 
+    (winRate * 10) + 
+    (comboUsageRate * 2) +
+    (consecutiveCombos * 1.5);
+
+  if (power < 10) return 1;
+  if (power < 18) return 2;
+  if (power < 28) return 3;
+  return 4; // Supreme AI
+}
 
 function allCoords(size: number): Coord[] {
   const out: Coord[] = [];
@@ -78,17 +110,51 @@ function shuffled<T>(arr: T[]): T[] {
   return a;
 }
 
+// ─── Strategy Modes (Part 3 & 4) ──────────────────────────────────────────────
+
+type StrategyMode = "Aggressive" | "Defense" | "Control" | "Combo";
+
+type StrategyWeights = {
+  killValue: number;
+  territoryGain: number;
+  survival: number;
+  comboPotential: number;
+  boardControl: number;
+};
+
+const STRATEGY_MODES: Record<StrategyMode, StrategyWeights> = {
+  Aggressive: { killValue: 12, territoryGain: 2, survival: 3, comboPotential: 5, boardControl: 2 },
+  Defense:    { killValue: 5,  territoryGain: 4, survival: 12, comboPotential: 3, boardControl: 6 },
+  Control:    { killValue: 6,  territoryGain: 10, survival: 5, comboPotential: 4, boardControl: 8 },
+  Combo:      { killValue: 4,  territoryGain: 3, survival: 4, comboPotential: 15, boardControl: 3 },
+};
+
+function chooseStrategy(scoreDiff: number, turn: number): StrategyMode {
+  // If losing significantly, go Aggressive
+  if (scoreDiff < -15) return "Aggressive";
+  // If winning significantly, go Defense
+  if (scoreDiff > 15) return "Defense";
+  // Early game, prefer Control
+  if (turn < 10) return "Control";
+  // mid game, random mix or based on hand (simplified here to random)
+  const r = rand01();
+  if (r < 0.3) return "Aggressive";
+  if (r < 0.6) return "Combo";
+  return "Control";
+}
+
 // ─── Board evaluation ─────────────────────────────────────────────────────────
 
 /**
  * Rich multi-factor board evaluation.
- * Returns a score from the AI's perspective (higher = better for AI).
+ * Modified for Part 2 & 5 (Adaptive Board Evaluation).
  */
 function evaluateBoard(
   board: Board,
   aiFaction: Faction,
   humanFaction: Faction,
   captures: Record<Faction, number>,
+  weights: StrategyWeights,
 ): number {
   const { scores } = computeScore(board, captures);
   const size = board.length;
@@ -96,10 +162,9 @@ function evaluateBoard(
 
   let score = 0;
 
-  // ── Territory (primary) ────────────────────────────────────────────────────
-  score += (scores.territory[aiFaction] - scores.territory[humanFaction]) * 2;
-  // ── Captures ──────────────────────────────────────────────────────────────
-  score += (scores.captures[aiFaction] - scores.captures[humanFaction]) * 1.5;
+  // ── Territory & Captures (Weighted per Strategy) ──────────────────────────
+  score += (scores.territory[aiFaction] - scores.territory[humanFaction]) * weights.boardControl;
+  score += (scores.captures[aiFaction] - scores.captures[humanFaction]) * weights.killValue;
 
   const seenGroups = new Set<string>();
 
@@ -116,21 +181,21 @@ function evaluateBoard(
     const libs = getLiberties(board, g).length;
 
     if (isAi) {
-      // ── Danger: our groups with few liberties ──────────────────────────
-      if (libs === 0) score -= 12;
-      else if (libs === 1) score -= 7;
-      else if (libs === 2) score -= 2;
-      // ── Centre control bonus ───────────────────────────────────────────
+      // ── Survival Weight ──────────────────────────────────────────────────
+      if (libs === 0) score -= weights.survival * 1.5;
+      else if (libs === 1) score -= weights.survival;
+      else if (libs === 2) score -= weights.survival * 0.3;
+      
+      // ── Territory Gain (Control) ─────────────────────────────────────────
       for (const c of g) {
         const dist = Math.max(Math.abs(c.r - centre), Math.abs(c.c - centre));
-        if (dist <= 1) score += 1.2;
-        else if (dist <= 2) score += 0.4;
+        if (dist <= 1) score += (weights.territoryGain * 0.5);
       }
     } else {
-      // ── Capture opportunity: enemy groups with few liberties ───────────
-      if (libs === 0) score += 14;        // already dead (shouldn't normally happen)
-      else if (libs === 1) score += 9;    // one move to kill
-      else if (libs === 2) score += 3.5;  // reachable threat
+      // ── Kill Opportunity ──────────────────────────────────────────────────
+      if (libs === 0) score += weights.killValue;
+      else if (libs === 1) score += (weights.killValue * 0.7);
+      else if (libs === 2) score += (weights.killValue * 0.3);
     }
   }
 
@@ -147,6 +212,7 @@ function scoreUnitMove(
   captures: Record<Faction, number>,
   card: Card,
   scores: ScoreBreakdown,
+  weights: StrategyWeights,
 ): number {
   const legality = isSuicideUnlessCapture(board, at, aiFaction);
   if (!legality.ok) return -Infinity;
@@ -157,41 +223,32 @@ function scoreUnitMove(
   const myGroup = getGroup(after.board, at);
   const myLibs = getLiberties(after.board, myGroup).length;
 
-  // Hard veto: placing here leaves our group with 0 liberties.
   if (myLibs === 0) return -Infinity;
 
   const capturedCount = after.captured.reduce((sum, e) => sum + e.stonesRemoved.length, 0);
-
-  // Updated captures for scoring
   const newCaptures = { ...captures, [aiFaction]: captures[aiFaction] + capturedCount };
-  const boardScore = evaluateBoard(after.board, aiFaction, humanFaction, newCaptures);
+  const boardScore = evaluateBoard(after.board, aiFaction, humanFaction, newCaptures, weights);
 
   let s = boardScore;
 
-  // ── Liberty safety ─────────────────────────────────────────────────────────
-  if (myLibs === 1) s -= 6;     // very risky
-  else if (myLibs === 2) s -= 1;
-  else if (myLibs >= 4) s += 1; // very safe
+  // ── Survival Adjustment ───────────────────────────────────────────────────
+  if (myLibs === 1) s -= weights.survival;
+  else if (myLibs === 2) s -= (weights.survival * 0.2);
 
-  // ── Capture reward ────────────────────────────────────────────────────────
-  s += capturedCount * 5;
+  // ── Kill Reward ──────────────────────────────────────────────────────────
+  s += capturedCount * (weights.killValue * 0.5);
 
-  // ── Synergy/combo tag bonus ───────────────────────────────────────────────
-  const tags = card.synergyTags ?? [];
-  const comboTags = ["monkey", "demon", "hero_rama", "hero_lanka", "chain", "summon"];
-  for (const t of tags) if (comboTags.includes(t)) { s += 1.5; break; }
-
-  // ── Legendary: only play in a safe position ───────────────────────────────
-  if (card.tier === "legendary") {
-    if (myLibs >= 3) s += 3;
-    else s -= 4;
+  // ── Combo Logic (Part 8 & 9) ──────────────────────────────────────────────
+  const role = (card as any).logicRole ?? "none";
+  if (weights.comboPotential > 10) {
+     if (role === "setup") s += weights.comboPotential;
+     if (role === "finisher" && capturedCount > 0) s += weights.comboPotential * 1.5;
   }
 
-  // ── Comeback bonus: AI losing → boost aggressive moves ───────────────────
-  const aiTotal = scores.total[aiFaction];
-  const humanTotal = scores.total[humanFaction];
-  if (aiTotal < humanTotal - 5) {
-    s += capturedCount > 0 ? 4 : 1.5;
+  // ── Legendary: more conservative ─────────────────────────────────────────
+  if (card.tier === "legendary") {
+    if (myLibs >= 3) s += 5;
+    else s -= weights.survival;
   }
 
   return s;
@@ -208,6 +265,7 @@ function scoreSkillMoves(
   humanFaction: Faction,
   captures: Record<Faction, number>,
   scores: ScoreBreakdown,
+  weights: StrategyWeights,
 ): ScoredSkillMove[] {
   if (card.type !== "skill") return [];
   const size = board.length;
@@ -234,7 +292,7 @@ function scoreSkillMoves(
       const bonus = isDesperate ? 4 : 0;
       results.push({
         move: { kind: "skillDestroyWeakGroup", caster: aiFaction, targetAnyCellInEnemyGroup: p, fromCardId: card.id },
-        score: (libs === 1 ? 12 : 7) + gs * 1.5 + bonus,
+        score: (libs === 1 ? weights.killValue : weights.killValue * 0.5) + gs * 1.5 + (isDesperate ? 5 : 0),
       });
     }
   }
@@ -259,7 +317,7 @@ function scoreSkillMoves(
     for (const { p, libertyReduction } of empties.slice(0, 4)) {
       results.push({
         move: { kind: "skillBlockTile", caster: aiFaction, at: p, durationTurns: 2, fromCardId: card.id },
-        score: 2.5 + libertyReduction * 2.5,
+        score: (weights.boardControl * 0.5) + libertyReduction * 2,
       });
     }
   }
@@ -283,7 +341,7 @@ function scoreSkillMoves(
         if (killBonus > 0 || isDesperate) {
           results.push({
             move: { kind: "skillPushUnit", caster: aiFaction, from: p, dir, fromCardId: card.id },
-            score: 4 + killBonus + (isDesperate ? 2 : 0),
+            score: (weights.boardControl * 0.5) + killBonus * 1.5 + (isDesperate ? 2 : 0),
           });
         }
       }
@@ -315,7 +373,7 @@ function scoreSkillMoves(
     for (const { p, enemiesHit, alliesHit } of centres.slice(0, 3)) {
       results.push({
         move: { kind: "skillStormCut", caster: aiFaction, center: p, radius: 1, fromCardId: card.id },
-        score: 5 + enemiesHit * 3 - alliesHit * 4 + (isDesperate ? 3 : 0),
+        score: (weights.killValue * 0.5) + enemiesHit * 3 - alliesHit * 4 + (isDesperate ? 3 : 0),
       });
     }
   }
@@ -337,6 +395,7 @@ function worstReplyEval(
   aiFaction: Faction,
   humanFaction: Faction,
   captures: Record<Faction, number>,
+  weights: StrategyWeights,
 ): number {
   const empties: Coord[] = [];
   for (const p of allCoords(board.length)) if (board[p.r]![p.c]!.kind === "empty") empties.push(p);
@@ -345,82 +404,66 @@ function worstReplyEval(
   for (const at of empties.slice(0, 20)) {
     const b2 = simulateUnitMove(board, at, humanFaction);
     if (!b2) continue;
-    const s = evaluateBoard(b2, aiFaction, humanFaction, captures);
+    const s = evaluateBoard(b2, aiFaction, humanFaction, captures, weights);
     if (s < worstForAi) worstForAi = s;
   }
-  return worstForAi === Infinity ? evaluateBoard(board, aiFaction, humanFaction, captures) : worstForAi;
+  return worstForAi === Infinity ? evaluateBoard(board, aiFaction, humanFaction, captures, weights) : worstForAi;
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 export function aiChooseMove(input: AiInput): Move {
-  const { level, board, aiFaction, humanFaction, hand, energy, captures, lastMoveCoord } = input;
+  let { level, board, aiFaction, humanFaction, hand, energy, captures, lastMoveCoord, playerPowerMetrics } = input;
+
+  // Part 1: Dynamic Level Calculation
+  if (playerPowerMetrics) {
+    level = calculateDynamicLevel(playerPowerMetrics) as any;
+  }
 
   const unitCards = hand.filter((c) => c.type === "unit" && c.cost <= energy);
   const skillCards = hand.filter((c) => c.type === "skill" && c.cost <= energy);
   const size = board.length;
 
-  // ── Level 1: mostly random legal placement ───────────────────────────────
-  if (level === 1) {
-    const empties: Coord[] = [];
-    for (const p of allCoords(size)) if (board[p.r]![p.c]!.kind === "empty") empties.push(p);
-    const candidates = shuffled(empties);
-    for (const at of candidates) {
-      const card = unitCards[randInt(Math.max(1, unitCards.length))];
-      if (!card) break;
-      if (isSuicideUnlessCapture(board, at, aiFaction).ok)
-        return { kind: "playUnit", faction: aiFaction, at, fromCardId: card.id };
-    }
-    return { kind: "pass" };
-  }
-
-  // ── Level 2 / 3: heuristic search ───────────────────────────────────────
   const { scores } = computeScore(board, captures);
+  
+  // Part 3: Strategy Selection
+  const strategy = chooseStrategy(scores.total[aiFaction] - scores.total[humanFaction], input.turn);
+  const weights = STRATEGY_MODES[strategy];
 
-  type Cand = { move: Move; score: number };
-  const cands: Cand[] = [];
-
-  // Unit placements
-  const empties: Coord[] = [];
-  for (const p of allCoords(size)) if (board[p.r]![p.c]!.kind === "empty") empties.push(p);
-
-  for (const card of unitCards) {
-    for (const at of empties) {
-      const s = scoreUnitMove(board, at, aiFaction, humanFaction, captures, card, scores);
-      if (s === -Infinity) continue;
-      cands.push({
-        move: { kind: "playUnit", faction: aiFaction, at, fromCardId: card.id },
-        score: s,
-      });
-    }
+  // ── Level 1: Beginner (Heuristic with mistakes) ─────────────────────────
+  // Part 10: Smart Mistakes (Instead of random, pick 3rd or 4th best)
+  if (level === 1) {
+    const cands = getAllCandidates(board, unitCards, skillCards, aiFaction, humanFaction, captures, scores, weights);
+    if (!cands.length) return { kind: "pass" };
+    cands.sort((a, b) => b.score - a.score);
+    // Pick from index 3-5 if available, else best
+    const index = Math.min(cands.length - 1, randInt(3) + 2);
+    return cands[index]!.move;
   }
 
-  // Skill moves
-  for (const card of skillCards) {
-    const skillCands = scoreSkillMoves(board, card, aiFaction, humanFaction, captures, scores);
-    for (const sc of skillCands) cands.push(sc);
-  }
-
+  // ── Level 2 / 3 / 4: Professional to Supreme ────────────────────────────
+  const cands = getAllCandidates(board, unitCards, skillCards, aiFaction, humanFaction, captures, scores, weights);
   if (!cands.length) return { kind: "pass" };
 
   cands.sort((a, b) => b.score - a.score);
 
-  // Anti-repeat: if best move == last move coord, demote it slightly
+  // Anti-repeat
   if (lastMoveCoord && cands.length > 1) {
     const bestMove = cands[0]!.move;
     let bestCoord: string | undefined;
     if (bestMove.kind === "playUnit") bestCoord = coordKey(bestMove.at);
     if (bestCoord === lastMoveCoord) {
-      // Swap best and second-best
       const tmp = cands[0]!;
       cands[0] = cands[1]!;
       cands[1] = tmp;
     }
   }
 
-  // ── Level 3 minimax on top candidates ────────────────────────────────────
-  if (level === 3) {
-    const top = cands.slice(0, 8);
+  // ── Level 3 & 4 (Forward Planning) ───────────────────────────────────────
+  if (level >= 3) {
+    // Level 3 looks at top 8, Level 4 looks at top 15
+    const lookaheadCount = level === 4 ? 15 : 8;
+    const top = cands.slice(0, lookaheadCount);
     let bestMove = top[0]!.move;
     let bestScore = -Infinity;
 
@@ -429,10 +472,12 @@ export function aiChooseMove(input: AiInput): Move {
       if (cand.move.kind === "playUnit") {
         afterBoard = simulateUnitMove(board, cand.move.at, aiFaction);
       }
+      // TODO: Simulate skill effects too in Phase 3
       const futureScore = afterBoard
-        ? worstReplyEval(afterBoard, aiFaction, humanFaction, captures)
+        ? worstReplyEval(afterBoard, aiFaction, humanFaction, captures, weights)
         : cand.score;
-      const combined = cand.score * 0.6 + futureScore * 0.4;
+      
+      const combined = cand.score * 0.5 + futureScore * 0.5;
       if (combined > bestScore) {
         bestScore = combined;
         bestMove = cand.move;
@@ -441,13 +486,45 @@ export function aiChooseMove(input: AiInput): Move {
     return bestMove;
   }
 
-  // ── Human-like variation ─────────────────────────────────────────────────
-  //   level 2: 80% pick best, 20% pick randomly from top 5
-  const bestThreshold = level === 2 ? 0.80 : 0.95;
-  if (rand01() > bestThreshold && cands.length > 1) {
-    const pool = cands.slice(0, Math.min(5, cands.length));
-    return pool[randInt(pool.length)]!.move;
+  // Level 2: 70% best, 30% top-3 random
+  if (rand01() > 0.7 && cands.length > 1) {
+    return cands[randInt(Math.min(3, cands.length))]!.move;
   }
 
   return cands[0]!.move;
+}
+
+/** Helper to gather all possible moves and their heuristic scores */
+function getAllCandidates(
+  board: Board,
+  unitCards: Card[],
+  skillCards: Card[],
+  aiFaction: Faction,
+  humanFaction: Faction,
+  captures: Record<Faction, number>,
+  scores: ScoreBreakdown,
+  weights: StrategyWeights
+): { move: Move; score: number }[] {
+  const cands: { move: Move; score: number }[] = [];
+  const size = board.length;
+  const empties: Coord[] = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (board[r]![c]!.kind === "empty") empties.push({ r, c });
+    }
+  }
+
+  for (const card of unitCards) {
+    for (const at of empties) {
+      const s = scoreUnitMove(board, at, aiFaction, humanFaction, captures, card, scores, weights);
+      if (s !== -Infinity) cands.push({ move: { kind: "playUnit", faction: aiFaction, at, fromCardId: card.id }, score: s });
+    }
+  }
+
+  for (const card of skillCards) {
+    const scs = scoreSkillMoves(board, card, aiFaction, humanFaction, captures, scores, weights);
+    for (const sc of scs) cands.push(sc);
+  }
+
+  return cands;
 }
