@@ -284,7 +284,14 @@ export function DeckBuilder({ onBack }: { onBack?: () => void }) {
                 if (!p) return <div className="text-slate-400">วางเมาส์บนการ์ดเพื่อดูความสามารถ</div>;
                 return (
                   <div>
-                    <div className="text-sm font-bold text-white">{p.icon} {p.name}</div>
+                  <div className="flex items-center gap-2">
+                    {p.image ? (
+                      <img src={p.image} alt={p.name} className="h-8 w-auto object-contain drop-shadow-sm" />
+                    ) : (
+                      <span className="text-xl">{p.icon}</span>
+                    )}
+                    <div className="text-sm font-bold text-white">{p.name}</div>
+                  </div>
                     <div className="mt-1 text-slate-300">พลังงาน {p.cost} • {p.tier}</div>
                     <div className="mt-1 text-slate-100">ความสามารถ: {p.ability?.trigger !== "-" ? (p.ability?.action === "ไม่มี" ? p.ability?.result : `${p.ability?.action} ➔ ${p.ability?.result}`) : "ไม่มี"}</div>
                     <div className="text-slate-400">คำอธิบาย: {p.description}</div>

@@ -24,7 +24,13 @@ export default function MenuPage() {
                   className="rounded-2xl bg-gradient-to-b from-blue-500 to-blue-700 px-4 py-3 text-base font-bold shadow-[0_4px_15px_rgba(37,99,235,0.4)] hover:brightness-110 active:scale-95 transition-all"
                   onClick={() => router.push("/select-faction")}
                 >
-                  ⚔️ เริ่มเกม
+                  ⚔️ เล่นกับ AI
+                </button>
+                <button
+                  className="rounded-2xl bg-gradient-to-b from-purple-500 to-purple-700 px-4 py-3 text-base font-bold shadow-[0_4px_15px_rgba(168,85,247,0.4)] hover:brightness-110 active:scale-95 transition-all text-white"
+                  onClick={() => router.push("/online")}
+                >
+                  🎮 เล่นออนไลน์
                 </button>
                 <button
                   className="rounded-xl bg-slate-800 border border-slate-700 px-4 py-2.5 text-sm font-bold hover:bg-slate-700 active:scale-95 transition-all w-full leading-tight"

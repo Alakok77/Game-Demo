@@ -6,6 +6,7 @@ import { placementRingClasses, unitHoverRingClasses } from "@/lib/factionUi";
 import { BoardUnit } from "./BoardUnit";
 import { CARD_LIBRARY } from "@/data/cards";
 import { useEffect, useState } from "react";
+import { useGameStore } from "@/store/gameStore";
 
 // ─── Territory visual helpers ─────────────────────────────────────────────────
 
@@ -87,6 +88,12 @@ export function Cell({
 
   const [mobileTooltip, setMobileTooltip] = useState(false);
 
+  // Online turn check
+  const onlineMode = useGameStore((s) => s.onlineMode);
+  const onlinePlayerRole = useGameStore((s) => s.onlinePlayerRole);
+  const active = useGameStore((s) => s.active); // mapped by syncFromOnline to HUMAN if it's our role's turn
+
+
   // Auto-hide mobile tooltip after 3s
   useEffect(() => {
     if (mobileTooltip) {
@@ -130,6 +137,10 @@ export function Cell({
       <button
         aria-label={`cell-${coord.r}-${coord.c}`}
         onClick={() => {
+          if (onlineMode && active !== "HUMAN") {
+            console.warn("CELL CLICK BLOCKED: NOT YOUR TURN", { onlinePlayerRole, active });
+            return;
+          }
           if (isMobile && tile.kind === "unit" && !hasCardSelected) {
             setMobileTooltip(!mobileTooltip);
           }

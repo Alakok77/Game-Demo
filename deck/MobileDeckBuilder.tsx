@@ -89,7 +89,13 @@ function CardDetailModal({
 
         {/* Header */}
         <div className="flex items-start gap-3 px-5 pt-1 pb-3">
-          <span className="text-5xl leading-none drop-shadow-lg mt-1">{card.icon ?? "🃏"}</span>
+          <div className="flex items-center justify-center w-16 h-16 shrink-0 mt-1">
+            {card.image ? (
+              <img src={card.image} alt={card.name} className="h-full w-auto object-contain drop-shadow-lg" />
+            ) : (
+              <span className="text-5xl leading-none drop-shadow-lg">{card.icon ?? "🃏"}</span>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="text-xl font-black text-white leading-tight">{card.name}</div>
             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -225,7 +231,11 @@ function DeckSlotCard({
 
       {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-center px-1 pt-3 pb-1 text-center">
-        <div className="text-3xl sm:text-4xl leading-none mb-1 drop-shadow-md">{card.icon ?? "🃏"}</div>
+        {card.image ? (
+          <img src={card.image} alt={card.name} className="h-10 w-auto object-contain mb-1 drop-shadow-md" />
+        ) : (
+          <div className="text-3xl sm:text-4xl leading-none mb-1 drop-shadow-md">{card.icon ?? "🃏"}</div>
+        )}
         <div className="text-[10px] sm:text-xs font-black text-white line-clamp-2 leading-tight px-1 drop-shadow">
           {card.name}
         </div>
@@ -289,8 +299,12 @@ function LibraryCardRow({
         </div>
       )}
 
-      {/* Icon */}
-      <span className="text-2xl leading-none shrink-0">{card.icon ?? "🃏"}</span>
+      {/* Icon / Image */}
+      {card.image ? (
+        <img src={card.image} alt={card.name} className="h-8 w-auto object-contain shrink-0 drop-shadow-sm" />
+      ) : (
+        <span className="text-2xl leading-none shrink-0">{card.icon ?? "🃏"}</span>
+      )}
 
       {/* Name + meta */}
       <div className="flex-1 min-w-0">

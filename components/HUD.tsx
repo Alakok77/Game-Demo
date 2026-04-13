@@ -45,6 +45,9 @@ export function HUD() {
   const activeSynergies = useGameStore((s) => s.activeSynergies);
   const comboState = useGameStore((s) => s.comboState);
 
+  const onlineMode = useGameStore((s) => s.onlineMode);
+  const onlinePlayerRole = useGameStore((s) => s.onlinePlayerRole);
+
   const selected = selectedCardId ? human.hand.find((c) => c.id === selectedCardId) : undefined;
   const playableCards = human.hand.filter((c) => c.cost <= human.energy);
   const cheapestPlayableCost =
@@ -87,12 +90,16 @@ export function HUD() {
           <div className="flex flex-col items-center justify-center rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-center">
             <div className="text-xs text-slate-300">เทิร์น {turn}</div>
             <div className={["mt-1 rounded-lg px-3 py-1.5 text-sm font-bold", activeTurnBannerClasses(active === "HUMAN", human.faction)].join(" ")}>
-              {active === "HUMAN" ? "👉 ตาของคุณ" : "🤖 ตา AI"}
+              {active === "HUMAN" ? "👉 ตาของคุณ" : (onlineMode ? "⌛ ตาคู่แข่ง" : "🤖 ตา AI")}
             </div>
             <div className="mt-2 text-xs text-slate-300">⚡ พลังงาน: {human.energy}</div>
             <div className="text-xs text-emerald-200">+2 พลังงาน / เทิร์น</div>
             <div className="text-xs text-slate-300">การ์ดที่ใช้: {cardsPlayed}/2</div>
-            {phase === "aiThinking" ? <div className="mt-1 text-xs text-red-200">AI กำลังคิด...</div> : null}
+            {phase === "aiThinking" ? (
+              <div className="mt-1 text-xs font-medium text-red-200 animate-pulse">
+                {onlineMode ? "คู่แข่งกำลังคิด..." : "AI กำลังคิด..."}
+              </div>
+            ) : null}
             {/* Synergy active indicator */}
             {activeSynergies.length > 0 && active === "HUMAN" ? (
               <div className="mt-1 rounded-lg bg-yellow-400/20 px-2 py-0.5 text-xs font-semibold text-yellow-200 animate-pulse">

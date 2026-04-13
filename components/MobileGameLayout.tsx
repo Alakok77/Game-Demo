@@ -8,6 +8,8 @@ import { MobileHand } from "@/components/MobileHand";
 import { useGameStore } from "@/store/gameStore";
 import { humanPlayerLabel, aiPlayerLabel } from "@/lib/factionUi";
 import { EffectBar } from "@/components/EffectBar";
+import { ref, onValue } from "firebase/database";
+import { db } from "@/lib/firebase";
 
 // ─── Compact contextual hint (Floating) ───────────────────────────────────────
 
@@ -79,6 +81,30 @@ export function MobileGameLayout() {
   const aiTotal = scores.total[ai.faction] ?? 0;
   const leading = humanTotal > aiTotal ? "HUMAN" : humanTotal < aiTotal ? "AI" : "TIED";
 
+  // ─── ONLINE SYNC ──────────────────────────────────────────────────────────
+  const onlineMode = useGameStore((s) => s.onlineMode);
+  const onlineRoomId = useGameStore((s) => s.onlineRoomId);
+  const onlineUserId = useGameStore((s) => s.onlineUserId);
+  const onlinePlayerRole = useGameStore((s) => s.onlinePlayerRole);
+  const syncFromOnline = useGameStore((s) => s.syncFromOnline);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => { setMounted(true); }, []);
+
+  React.useEffect(() => {
+    if (!mounted || !onlineMode || !onlineRoomId) return;
+
+    const roomRef = ref(db, `battle_rooms_v2/${onlineRoomId}`);
+    const unsubscribe = onValue(roomRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data && data.status === "playing" && data.gameState) {
+        syncFromOnline(data);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [mounted, onlineMode, onlineRoomId, onlineUserId, syncFromOnline]);
+
   // Lock body scroll
   React.useEffect(() => {
     const prev = document.body.style.overflow;
@@ -115,15 +141,23 @@ export function MobileGameLayout() {
             ].join(" ")}>
               เทิร์น {turn}/30
             </div>
-            <div className={["text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 leading-none",
+            <div className={["text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 leading-none flex flex-col items-center",
               isMyTurn ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400",
             ].join(" ")}>
+              {onlineMode && (
+                <span className="text-[8px] opacity-80 mb-0.5 font-black uppercase">
+                  {onlinePlayerRole === "host" ? `ผู้เล่น 1 (HOST) - ${onlineUserId.slice(-4)}` : `ผู้เล่น 2 (GUEST) - ${onlineUserId.slice(-4)}`}
+                </span>
+              )}
               {isMyTurn ? "🎮 ตาคุณ" : (
                 <motion.span
                   animate={{ opacity: [0.6, 1, 0.6] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
-                  {turn < 5 ? "🤖 AI วางหมาก..." : turn < 15 ? "🤔 AI รวมแผน..." : "💭 AI ปิดเกม..."}
+                {onlineMode 
+                  ? "⌛ ถึงตาคู่แข่ง..." 
+                  : (turn < 5 ? "🤖 AI วางหมาก..." : turn < 15 ? "🤔 AI รวมแผน..." : "💭 AI ปิดเกม...")
+                }
                 </motion.span>
               )}
             </div>

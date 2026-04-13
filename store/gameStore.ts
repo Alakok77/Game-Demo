@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { ref, runTransaction, update, get as getDb } from "firebase/database";
+import { db } from "@/lib/firebase";
 import { loadData, saveData } from "@/lib/storage";
 import { applyCardEffect } from "@/game/abilityExecution";
 import type {
@@ -13,6 +15,7 @@ import type {
   PreviewResult,
   Settings,
   SkillCard,
+  TurnPhase,
   UnitCard,
 } from "@/game/types";
 import {
@@ -28,7 +31,7 @@ import {
   removeGroup,
 } from "@/game/logic";
 import { computeScore, emptyTerritoryMap } from "@/game/territory";
-import { aiChooseMove } from "@/game/ai";
+import { aiChooseMove, type AiInput } from "@/game/ai";
 import { getTargetDef } from "@/game/targetMechanics";
 import {
   CARD_LIBRARY,
@@ -75,7 +78,53 @@ type Actions = {
   cancelTargetSelection: () => void;
   confirmTargetSelection: () => void;
   triggerActiveEffect: (payload: import("@/game/types").ActiveEffectPayload) => void;
+  // Online actions
+  setOnlineMode: (roomId: string | null, role: "host" | "guest" | null) => void;
+  syncFromOnline: (roomData: any) => void;
+  initOnlineGame: () => Promise<void>;
 };
+
+/**
+ * Ensures a PlayerState has all required arrays (prevents Firebase undefined issues).
+ */
+function normalizePlayerState(ps: any): PlayerState {
+  if (!ps) return ps;
+  return {
+    ...ps,
+    hand: ps.hand || [],
+    deck: ps.deck || [],
+    discard: ps.discard || [],
+  };
+}
+
+/**
+ * Ensures a GameState has all required arrays and maps (prevents Firebase undefined issues).
+ */
+export function normalizeState(state: any): GameState {
+  if (!state) return state;
+  const s = { ...state };
+  s.boardStateHistory = s.boardStateHistory || [];
+  s.activeSynergies = s.activeSynergies || [];
+  s.lastCaptures = (s.lastCaptures || []).map((e: any) => ({
+    ...e,
+    stonesRemoved: e.stonesRemoved || [],
+  }));
+  s.human = normalizePlayerState(s.human);
+  s.ai = normalizePlayerState(s.ai);
+  s.comboState = {
+    ...(s.comboState || {}),
+    playedTemplateIds: s.comboState?.playedTemplateIds || [],
+    playedCardTypes: s.comboState?.playedCardTypes || [],
+  };
+  
+  if (s.cardMap && !(s.cardMap instanceof Map)) {
+    s.cardMap = new Map(Object.entries(s.cardMap));
+  } else if (!s.cardMap) {
+    s.cardMap = new Map();
+  }
+  
+  return s as GameState;
+}
 
 function makeEmptyBoard(size: number): Board {
   return Array.from({ length: size }, () => Array.from({ length: size }, () => ({ kind: "empty" })));
@@ -163,9 +212,11 @@ function reshuffleIfEmpty(
   deck: Card[],
   discard: Card[],
 ): { deck: Card[]; discard: Card[]; reshuffled: boolean } {
-  if (deck.length > 0) return { deck, discard, reshuffled: false };
-  if (discard.length === 0) return { deck, discard, reshuffled: false };
-  const newDeck = [...discard];
+  const d = deck || [];
+  const disc = discard || [];
+  if (d.length > 0) return { deck: d, discard: disc, reshuffled: false };
+  if (disc.length === 0) return { deck: d, discard: disc, reshuffled: false };
+  const newDeck = [...disc];
   for (let i = newDeck.length - 1; i > 0; i--) {
     const j = Math.floor(random01() * (i + 1));
     [newDeck[i], newDeck[j]] = [newDeck[j]!, newDeck[i]!];
@@ -264,9 +315,9 @@ function ensurePlayableCard(
   energy: number,
   faction: Faction,
 ): { hand: Card[]; deck: Card[]; discard: Card[]; guaranteed: boolean } {
-  const h = [...hand];
-  const d = [...deck];
-  const disc = [...discard];
+  const h = hand ? [...hand] : [];
+  const d = deck ? [...deck] : [];
+  const disc = discard ? [...discard] : [];
   if (h.some((c) => c.cost <= energy)) return { hand: h, deck: d, discard: disc, guaranteed: false };
   if (h.length === 0) {
     h.push(makeFallbackBasicCard(faction));
@@ -299,9 +350,9 @@ function drawUpTo(
   discard: Card[],
   target: number,
 ): { hand: Card[]; deck: Card[]; discard: Card[]; reshuffled: boolean } {
-  const h = [...hand];
-  let d = [...deck];
-  let disc = [...discard];
+  const h = hand ? [...hand] : [];
+  let d = deck ? [...deck] : [];
+  let disc = discard ? [...discard] : [];
   let reshuffled = false;
   while (h.length < target) {
     if (d.length === 0) {
@@ -321,9 +372,9 @@ function drawOne(
   deck: Card[],
   discard: Card[],
 ): { hand: Card[]; deck: Card[]; discard: Card[]; reshuffled: boolean } {
-  const h = [...hand];
-  let d = [...deck];
-  let disc = [...discard];
+  const h = hand ? [...hand] : [];
+  let d = deck ? [...deck] : [];
+  let disc = discard ? [...discard] : [];
   let reshuffled = false;
   if (d.length === 0) {
     const r = reshuffleIfEmpty(d, disc);
@@ -364,24 +415,24 @@ function getActiveFaction(state: GameState): Faction {
   return state.active === "HUMAN" ? state.human.faction : state.ai.faction;
 }
 
-function getActivePlayerState(state: GameState): PlayerState {
+export function getActivePlayerState(state: GameState): PlayerState {
   return state.active === "HUMAN" ? state.human : state.ai;
 }
 
-function setMessage(text: string, kind: "info" | "warn" = "info") {
+export function setMessage(text: string, kind: "info" | "warn" = "info") {
   return { kind, text, nonce: Date.now() + Math.random() };
 }
 
-function clonePlayerState(ps: PlayerState): PlayerState {
+export function clonePlayerState(ps: PlayerState): PlayerState {
   return {
     ...ps,
-    deck: [...ps.deck],
-    hand: [...ps.hand],
-    discard: [...ps.discard],
+    deck: ps.deck ? [...ps.deck] : [],
+    hand: ps.hand ? [...ps.hand] : [],
+    discard: ps.discard ? [...ps.discard] : [],
   };
 }
 
-function makeUndoSnapshot(state: GameState): NonNullable<GameState["undoSnapshot"]> {
+export function makeUndoSnapshot(state: GameState): NonNullable<GameState["undoSnapshot"]> {
   return {
     board: cloneBoard(state.board),
     human: clonePlayerState(state.human),
@@ -393,7 +444,7 @@ function makeUndoSnapshot(state: GameState): NonNullable<GameState["undoSnapshot
       bonus: { ...state.scores.bonus },
       total: { ...state.scores.total },
     },
-    lastCaptures: state.lastCaptures.map((e) => ({ ...e, stonesRemoved: e.stonesRemoved.map((p) => ({ ...p })) })),
+    lastCaptures: (state.lastCaptures || []).map((e) => ({ ...e, stonesRemoved: (e.stonesRemoved || []).map((p) => ({ ...p })) })),
     lastMove: state.lastMove ? { ...state.lastMove } : undefined,
     cardsPlayedThisTurn: state.cardsPlayedThisTurn,
     selectedCardId: state.selectedCardId,
@@ -402,8 +453,8 @@ function makeUndoSnapshot(state: GameState): NonNullable<GameState["undoSnapshot
       HUMAN: { ...state.turnEnergyBonus.HUMAN },
       AI: { ...state.turnEnergyBonus.AI },
     },
-    activeSynergies: [...state.activeSynergies],
-    comboState: { ...state.comboState, playedTemplateIds: [...state.comboState.playedTemplateIds], playedCardTypes: [...state.comboState.playedCardTypes] },
+    activeSynergies: [...(state.activeSynergies || [])],
+    comboState: { ...state.comboState, playedTemplateIds: [...(state.comboState.playedTemplateIds || [])], playedCardTypes: [...(state.comboState.playedCardTypes || [])] },
     cardMap: state.cardMap instanceof Map ? new Map(state.cardMap) : new Map(Object.entries(state.cardMap as Record<string, import("@/game/synergy").CellCardInfo>)),
   };
 }
@@ -606,7 +657,7 @@ function applyMove(state: GameState, move: Move): GameState {
     const idx = activePS.hand.findIndex((c) => c.id === cardId);
     if (idx >= 0) {
       const [card] = activePS.hand.splice(idx, 1);
-      activePS.discard = [card!, ...activePS.discard];
+      activePS.discard = [card!, ...(activePS.discard || [])];
     }
   };
 
@@ -875,7 +926,7 @@ function endTurnIfNeeded(state: GameState): GameState {
 
   // ④ Board-state repetition (same fingerprint appears 3 times)
   const fp = boardFingerprint(state.board);
-  const history = [...state.boardStateHistory, fp];
+  const history = [...(state.boardStateHistory || []), fp];
   const repeatCount = history.filter((h) => h === fp).length;
   if (repeatCount >= 3) {
     return {
@@ -961,6 +1012,16 @@ function startOfTurn(state: GameState, who: Player): GameState {
   };
 }
 
+function ensureOnlineUserId() {
+  if (typeof window === "undefined") return "server";
+  let id = sessionStorage.getItem("game_online_user_id");
+  if (!id) {
+    id = "u_" + Math.random().toString(36).substring(2, 7);
+    sessionStorage.setItem("game_online_user_id", id);
+  }
+  return id;
+}
+
 const BOARD_SIZE = 7;
 
 export const useGameStore = create<GameState & Actions>((set, get) => {
@@ -1017,6 +1078,11 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       consecutivePasses: 0,
       boardStateHistory: [],
       gameOverReason: undefined,
+      // Online state defaults
+      onlineMode: false,
+      onlineRoomId: null,
+      onlinePlayerRole: null,
+      onlineUserId: ensureOnlineUserId(),
     };
   };
 
@@ -1219,9 +1285,32 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
 
     tryPlayAt: (cell) => {
       const s = get();
-      if (s.phase !== "player" || s.active !== "HUMAN") return;
+      
+      const canProceed = s.phase === "player" && s.active === "HUMAN";
+      if (!canProceed) {
+        if (s.onlineMode) console.warn("NOT YOUR TURN", { role: s.onlinePlayerRole, active: s.active });
+        return;
+      }
 
-      // Target selection mode is removed as per user request for instant auto-execution.
+      if (s.onlineMode && s.onlineRoomId) {
+        if (!s.onlineUserId) {
+          console.error("NO USER ID");
+          return;
+        }
+        console.log("TRY PLAY AT", { cell, role: s.onlinePlayerRole });
+        const actingPlayer = s.human; // Use s.human because it's swapped in syncFromOnline
+        const selected = s.selectedCardId ? actingPlayer.hand.find((c) => c.id === s.selectedCardId) : undefined;
+        
+        if (!selected) return set((st) => ({ ...st, message: setMessage("กรุณาเลือกการ์ดก่อน", "warn") }));
+        if (actingPlayer.energy < selected.cost) return set((st) => ({ ...st, message: setMessage("พลังงานไม่พอ", "warn") }));
+        if (s.cardsPlayedThisTurn >= 2) return set((st) => ({ ...st, message: setMessage("เล่นได้สูงสุด 2 ใบ", "warn") }));
+
+        performOnlineAction(s.onlineRoomId!, s.onlineUserId, {
+          kind: "move",
+          move: { kind: "playUnit", faction: actingPlayer.faction, at: cell, fromCardId: selected.id } as Move
+        });
+        return;
+      }
 
       const ps = s.human;
       const selected = s.selectedCardId ? ps.hand.find((c) => c.id === s.selectedCardId) : undefined;
@@ -1380,10 +1469,40 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       
       const handCard = s.undoSnapshot?.human.hand.find(c => c.comboType === ts.templateId || c.id === ts.templateId) || s.human.hand.find(c => c.id === ts.cardId);
       
-      // Apply actual board logic
+      // ONLINE MODE: Call performOnlineAction instead of local logic
+      if (s.onlineMode && s.onlineRoomId && s.onlineUserId) {
+         // Determine which move kind to send based on template/skill
+         let kind: Move["kind"] = "playUnit";
+         if (handCard?.type === "skill") {
+           const sk = handCard.skill.kind;
+           if (sk === "destroyWeakGroup") kind = "skillDestroyWeakGroup";
+           else if (sk === "blockTile") kind = "skillBlockTile";
+           else if (sk === "pushUnit") kind = "skillPushUnit";
+           else if (sk === "stormCut") kind = "skillStormCut";
+         }
+
+         const move: any = { 
+           kind, 
+           faction: s.human.faction, 
+           fromCardId: ts.cardId,
+           // Inject targets into the move object
+           targets: ts.selectedCoords 
+         };
+
+         // Map specific fields expected by types.ts if necessary
+         if (kind === "playUnit") move.at = ts.selectedCoords[0];
+         if (kind === "skillBlockTile") move.at = ts.selectedCoords[0];
+         if (kind === "skillDestroyWeakGroup") move.targetAnyCellInEnemyGroup = ts.selectedCoords[0];
+         if (kind === "skillPushUnit") move.from = ts.selectedCoords[0];
+         if (kind === "skillStormCut") move.center = ts.selectedCoords[0];
+
+         performOnlineAction(s.onlineRoomId, s.onlineUserId, { kind: "move", move: move as Move });
+         set({ targetSelection: undefined }); // Clear local UI state
+         return;
+      }
+
+      // LOCAL MODE (remains unchanged)
       const newBoard = applyCardEffect(s.board, ts.templateId, ts.selectedCoords, s.human.faction);
-      
-      // Clear target mode and proceed to end turn
       let nextState = { ...s, targetSelection: undefined, board: newBoard };
       
       const { scores, territoryMap } = recompute(newBoard, nextState.human, nextState.ai);
@@ -1412,7 +1531,17 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
 
     tryPass: () => {
       const s = get();
-      if (s.phase !== "player" || s.active !== "HUMAN") return;
+      if (s.phase !== "player" || s.active !== "HUMAN") {
+        if (s.onlineMode) console.warn("PASS BLOCKED", { role: s.onlinePlayerRole, active: s.active });
+        return;
+      }
+
+      if (s.onlineMode && s.onlineRoomId) {
+        console.log("TRY PASS", { role: s.onlinePlayerRole });
+        performOnlineAction(s.onlineRoomId!, s.onlineUserId, { kind: "pass" });
+        return;
+      }
+
       if (s.cardsPlayedThisTurn > 0) {
         return set((st) => ({ ...st, message: setMessage("ข้ามเทิร์นไม่ได้ เพราะคุณเล่นการ์ดแล้ว ให้กดจบเทิร์นแทน", "warn") }));
       }
@@ -1427,7 +1556,18 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
 
     tryEndTurn: () => {
       const s = get();
-      if (s.phase !== "player" || s.active !== "HUMAN") return;
+      if (s.phase !== "player" || s.active !== "HUMAN") {
+        if (s.onlineMode) console.warn("END TURN BLOCKED", { role: s.onlinePlayerRole, active: s.active });
+        return;
+      }
+
+      if (s.onlineMode && s.onlineRoomId) {
+        console.log("TRY END TURN (ONLINE)", { role: s.onlinePlayerRole });
+        performOnlineAction(s.onlineRoomId!, s.onlineUserId, { kind: "endTurn" });
+        set((st) => ({ ...st, selectedCardId: undefined, message: undefined }));
+        return;
+      }
+
       if (s.cardsPlayedThisTurn === 0) {
         return set((st) => ({ ...st, message: setMessage("หากไม่ต้องการเล่นการ์ด ให้กดข้ามเทิร์น", "info") }));
       }
@@ -1505,8 +1645,264 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         message: setMessage("สับมือใหม่แล้ว (Mulligan)"),
       }));
     },
+
+    setOnlineMode: (roomId, role) => set((s) => {
+      // CLEAR any existing game state completely when switching to online mode
+      // This prevents AI game data from bleeding into the online room.
+      const pf = s.playerFaction ?? "RAMA";
+      const emptyBoard = makeEmptyBoard(BOARD_SIZE);
+      const emptyPlayer = (faction: Faction): PlayerState => ({
+        faction,
+        deck: [],
+        hand: [],
+        discard: [],
+        energy: 0,
+        captures: 0,
+        passedLastTurn: false,
+        mulliganUsed: false,
+      });
+
+      return {
+        ...s,
+        onlineMode: !!roomId,
+        onlineRoomId: roomId,
+        onlinePlayerRole: role,
+        active: "AI", // Lock UI until sync/init completes
+        phase: roomId ? "connecting" : "menu",
+        // Reset core game state
+        board: emptyBoard,
+        turn: 0,
+        human: emptyPlayer(pf),
+        ai: emptyPlayer(otherFaction(pf)),
+        scores: computeScore(emptyBoard, { RAMA: 0, LANKA: 0 }).scores,
+        territoryMap: emptyTerritoryMap(BOARD_SIZE),
+        cardsPlayedThisTurn: 0,
+        selectedCardId: undefined,
+        undoSnapshot: undefined,
+        message: roomId ? setMessage("กำลังเชื่อมต่อห้อง...", "info") : undefined,
+      };
+    }),
+
+    syncFromOnline: (room) => set((s) => {
+      const myRole: "player1" | "player2" = room.player1?.id === s.onlineUserId ? "player1" : "player2";
+      const isMyTurn = room.turn === myRole;
+      const isPlaying = room.status === "playing";
+      
+      const rawSnap = room.gameState;
+      if (!rawSnap) {
+        console.log("SYNC: Waiting for gameState", { isPlaying, isMyTurn });
+        return {
+          ...s,
+          onlineMode: true,
+          onlineRoomId: s.onlineRoomId,
+          onlinePlayerRole: myRole,
+          active: "AI" as Player,
+          phase: "connecting" as TurnPhase,
+          message: isPlaying && isMyTurn ? setMessage("กำลังซิงค์ข้อมูลเกม...", "info") : s.message
+        };
+      }
+
+      const snap = normalizeState(rawSnap);
+
+      const isGameOver = snap.phase === "gameOver";
+
+      const baseUpdate: Partial<GameState> = {
+        onlineMode: true,
+        onlineRoomId: s.onlineRoomId,
+        onlinePlayerRole: myRole,
+        active: (isPlaying && isMyTurn) ? "HUMAN" : "AI" as Player,
+        phase: (isPlaying && !isMyTurn && !isGameOver) ? "aiThinking" : (snap.phase as TurnPhase),
+      };
+
+      // Role Swapping Logic:
+      // Firebase: player1 = Host, player2 = Guest
+      // Local Store: human = ME, ai = OPPONENT
+      let human = clonePlayerState(snap.human);
+      let ai = clonePlayerState(snap.ai);
+
+      if (myRole === "player2") {
+        human = clonePlayerState(snap.ai);
+        ai = clonePlayerState(snap.human);
+      }
+
+      return {
+        ...s,
+        ...baseUpdate,
+        board: snap.board || s.board,
+        turn: snap.turn ?? s.turn,
+        scores: snap.scores || s.scores,
+        territoryMap: snap.territoryMap || s.territoryMap,
+        lastCaptures: snap.lastCaptures || s.lastCaptures,
+        lastMove: snap.lastMove || s.lastMove,
+        cardsPlayedThisTurn: snap.cardsPlayedThisTurn ?? s.cardsPlayedThisTurn,
+        activeSynergies: snap.activeSynergies || s.activeSynergies,
+        comboState: snap.comboState || s.comboState,
+        boardStateHistory: snap.boardStateHistory || s.boardStateHistory || [],
+        consecutivePasses: snap.consecutivePasses ?? s.consecutivePasses,
+        cardMap: snap.cardMap,
+        human,
+        ai,
+      };
+    }),
+
+    initOnlineGame: async () => {
+      const s = get();
+      if (!s.onlineMode || !s.onlineRoomId || s.onlinePlayerRole !== "host") return;
+      if (s.isInitializing) return;
+
+      set({ isInitializing: true });
+      try {
+        const pf = s.playerFaction ?? "RAMA";
+        const hostFaction = pf;
+        const guestFaction = otherFaction(pf);
+        
+        const sInit = fresh(hostFaction, s.settings);
+        const aiRandomDeck = generateRandomDeck(guestFaction, CARD_LIBRARY.map(c => c.templateId), Date.now());
+        sInit.ai = initPlayer(guestFaction, aiRandomDeck.ids);
+
+        // RANDOMIZE TURN ORDER BEFORE STARTING
+        const firstTurn: "player1" | "player2" = Math.random() > 0.5 ? "player1" : "player2";
+        const firstActor: Player = (firstTurn === "player1") ? "HUMAN" : "AI";
+
+        const started = startOfTurn({ ...sInit, phase: "player", active: firstActor }, firstActor);
+
+        const firebaseState = stripUndefined({
+          ...started,
+          cardMap: serializeMap(started.cardMap),
+          undoSnapshot: null,
+          onlineMode: true,
+          hostId: s.onlineUserId
+        });
+
+        console.log("PUSHING INITIAL GAME STATE", { firstTurn, firebaseState });
+
+        await update(ref(db, `battle_rooms_v2/${s.onlineRoomId}`), {
+          gameState: firebaseState,
+          turn: firstTurn,
+          status: "playing",
+        });
+        
+        console.log("INITIALIZATION COMPLETE");
+        set({ phase: "player" });
+      } finally {
+        set({ isInitializing: false });
+      }
+    },
   };
 });
+
+export const serializeMap = (map: Map<any, any> | undefined | null) => {
+  if (!map || !(map instanceof Map)) return {};
+  return Object.fromEntries(map);
+};
+
+/**
+ * Recursively removes all properties with 'undefined' values from an object.
+ * Required for Firebase compatibility as it does not allow 'undefined' in updates.
+ */
+function stripUndefined(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(v => stripUndefined(v));
+  } else if (obj !== null && typeof obj === "object") {
+    return Object.entries(obj).reduce((acc: any, [key, value]) => {
+      if (value !== undefined) {
+        acc[key] = stripUndefined(value);
+      }
+      return acc;
+    }, {});
+  }
+  return obj;
+}
+
+export async function performOnlineAction(roomId: string, userId: string, action: { kind: "move", move: Move } | { kind: "pass" } | { kind: "endTurn" }) {
+  const roomRef = ref(db, `battle_rooms_v2/${roomId}`);
+  
+  return runTransaction(roomRef, (room) => {
+    if (!room) return room;
+    
+    const myRole = room.player1?.id === userId ? "player1" : "player2";
+    console.log("TRANSACTION ATTEMPT", { myRole, roomTurn: room.turn, action: action.kind });
+
+    if (room.turn !== myRole) {
+      console.warn("TRANSACTION BLOCKED: NOT YOUR TURN", { myRole, roomTurn: room.turn });
+      return room;
+    }
+
+    const rawState = room.gameState;
+    if (!rawState) {
+      console.warn("TRANSACTION BLOCKED: NO GAME STATE");
+      return room;
+    } 
+
+    const rawNormalized = normalizeState(rawState);
+    const turnActor: Player = room.turn === "player1" ? "HUMAN" : "AI";
+    
+    // CRITICAL: Ensure the state we are about to modify has the correct active player matching the turn
+    const state: GameState = {
+      ...rawNormalized,
+      active: turnActor
+    };
+
+    const myRoleForActor = room.player1?.id === userId ? "player1" : "player2";
+    const actor = myRoleForActor === "player1" ? "HUMAN" : "AI"; 
+    
+    let nextState = { ...state };
+    let shouldToggleTurn = false;
+
+    if (action.kind === "move") {
+      // Apply move directly to existing state (using the synced active player)
+      nextState = applyMove(state, action.move);
+
+      // Apply card effects
+      const move = action.move;
+      if (move.kind !== "pass") {
+        const playedCard = (actor === "HUMAN" ? state.human : state.ai).hand.find(c => c.id === (move as any).fromCardId);
+        if (playedCard && playedCard.ability) {
+          const templateId = playedCard.comboType ?? playedCard.id;
+          let coords: Coord[] = [];
+          if (move.kind === "playUnit" || move.kind === "skillBlockTile") coords = [move.at];
+          else if (move.kind === "skillDestroyWeakGroup") coords = [move.targetAnyCellInEnemyGroup];
+          else if (move.kind === "skillPushUnit") coords = [move.from];
+          else if (move.kind === "skillStormCut") coords = [move.center];
+
+          nextState.board = applyCardEffect(nextState.board, templateId, coords, (actor === "HUMAN" ? nextState.human.faction : nextState.ai.faction));
+          
+          const rec = recompute(nextState.board, nextState.human, nextState.ai);
+          nextState.scores = rec.scores;
+          nextState.territoryMap = rec.territoryMap;
+          nextState.cardMap = buildCardMap(nextState.board, nextState.human, nextState.ai, nextState.cardMap);
+          nextState.activeSynergies = recomputeSynergies(nextState.board, nextState.cardMap, nextState.territoryMap);
+        }
+      }
+      nextState.cardsPlayedThisTurn++;
+    } else if (action.kind === "pass") {
+      const actor = myRoleForActor === "player1" ? "HUMAN" : "AI";
+      nextState = applyMove(state, { kind: "pass" });
+      nextState.consecutivePasses++;
+      shouldToggleTurn = true;
+    } else if (action.kind === "endTurn") {
+      shouldToggleTurn = true;
+    }
+
+    nextState = endTurnIfNeeded(nextState);
+    
+    if (shouldToggleTurn && nextState.phase !== "gameOver") {
+      room.turn = (room.turn === "player1") ? "player2" : "player1";
+      const nextActor = room.turn === "player1" ? "HUMAN" : "AI";
+      nextState = startOfTurn(nextState, nextActor);
+    }
+
+    // Prepare for Firebase (serialize Map)
+    const firebaseState = stripUndefined({
+      ...nextState,
+      cardMap: serializeMap(nextState.cardMap),
+      undoSnapshot: null, 
+    });
+
+    room.gameState = firebaseState;
+    return room;
+  });
+}
 
 export function usePreview(): PreviewResult | undefined {
   const s = useGameStore();

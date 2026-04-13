@@ -149,7 +149,7 @@ export type ActiveEffectPayload = {
   result: string;
 };
 
-export type TurnPhase = "menu" | "tutorial" | "deckBuilder" | "player" | "aiThinking" | "gameOver";
+export type TurnPhase = "menu" | "tutorial" | "deckBuilder" | "player" | "aiThinking" | "gameOver" | "connecting";
 
 export type Settings = {
   beginnerMode: boolean;
@@ -238,6 +238,13 @@ export type GameState = {
   boardStateHistory: string[];
   /** Human-readable reason the game ended (displayed on result screen) */
   gameOverReason?: string;
+  // Online state fields
+  onlineMode?: boolean;
+  onlineRoomId?: string | null;
+  onlinePlayerRole?: "host" | "guest" | "player1" | "player2" | null;
+  onlineUserId: string;
+  onlineRoomData?: any;
+  isInitializing?: boolean;
 };
 
 // Re-export synergy types for convenience

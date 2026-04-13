@@ -76,8 +76,12 @@ export function DraggableCard({
       <div className={`absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${stripeColor}`} />
 
       <div className="flex items-center gap-2 px-2 pt-2 pb-1.5">
-        {/* Icon */}
-        <span className="text-lg leading-none shrink-0">{card.icon}</span>
+        {/* Icon / Image */}
+        {card.image ? (
+          <img src={card.image} alt={card.name} className="h-6 w-auto object-contain shrink-0 drop-shadow-sm" />
+        ) : (
+          <span className="text-lg leading-none shrink-0">{card.icon}</span>
+        )}
 
         {/* Name + meta */}
         <div className="min-w-0 flex-1">

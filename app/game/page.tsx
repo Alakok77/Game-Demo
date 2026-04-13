@@ -8,8 +8,10 @@ import { Hand } from "@/components/Hand";
 import { TutorialOverlay } from "@/components/TutorialOverlay";
 import { GameLegend } from "@/components/GameLegend";
 import { MobileGameLayout } from "@/components/MobileGameLayout";
-import { useGameStore } from "@/store/gameStore";
+import { useGameStore, performOnlineAction } from "@/store/gameStore";
 import { humanPlayerLabel, aiPlayerLabel } from "@/lib/factionUi";
+import { ref, onValue, update } from "firebase/database";
+import { db } from "@/lib/firebase";
 
 // ─── Mobile detection ─────────────────────────────────────────────────────────
 
@@ -74,21 +76,57 @@ export default function GamePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
-  const phase          = useGameStore((s) => s.phase);
-  const active         = useGameStore((s) => s.active);
-  const turn           = useGameStore((s) => s.turn);
-  const human          = useGameStore((s) => s.human);
-  const ai             = useGameStore((s) => s.ai);
-  const scores         = useGameStore((s) => s.scores);
+  const phase = useGameStore((s) => s.phase);
+  const active = useGameStore((s) => s.active);
+  const turn = useGameStore((s) => s.turn);
+  const human = useGameStore((s) => s.human);
+  const ai = useGameStore((s) => s.ai);
+  const scores = useGameStore((s) => s.scores);
   const selectedCardId = useGameStore((s) => s.selectedCardId);
-  const cardsPlayed    = useGameStore((s) => s.cardsPlayedThisTurn);
-  const message        = useGameStore((s) => s.message);
-  const tryPass        = useGameStore((s) => s.tryPass);
-  const tryEndTurn     = useGameStore((s) => s.tryEndTurn);
-  const undoLastMove   = useGameStore((s) => s.undoLastMove);
+  const cardsPlayed = useGameStore((s) => s.cardsPlayedThisTurn);
+  const message = useGameStore((s) => s.message);
+  const tryPass = useGameStore((s) => s.tryPass);
+  const tryEndTurn = useGameStore((s) => s.tryEndTurn);
+  const undoLastMove = useGameStore((s) => s.undoLastMove);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { if (phase === "gameOver") router.push("/result"); }, [phase, router]);
+
+  // ─── ONLINE SYNC ──────────────────────────────────────────────────────────
+  const onlineMode = useGameStore((s) => s.onlineMode);
+  const onlineRoomId = useGameStore((s) => s.onlineRoomId);
+  const onlineUserId = useGameStore((s) => s.onlineUserId);
+  const onlinePlayerRole = useGameStore((s) => s.onlinePlayerRole);
+  const syncFromOnline = useGameStore((s) => s.syncFromOnline);
+  const playerFaction = useGameStore((s) => s.playerFaction);
+  const settings = useGameStore((s) => s.settings);
+  const [onlineRoomData, setOnlineRoomData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!mounted || !onlineMode || !onlineRoomId) return;
+
+    const roomRef = ref(db, `battle_rooms_v2/${onlineRoomId}`);
+
+    const unsubscribe = onValue(roomRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+      setOnlineRoomData(data);
+
+      if (data.status === "playing") {
+        syncFromOnline(data);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [mounted, onlineMode, onlineRoomId, onlineUserId, syncFromOnline]);
+
+  // Host initialization helper
+  const initOnlineGame = useGameStore((s) => s.initOnlineGame);
+  useEffect(() => {
+    if (onlineMode && onlineRoomId && onlinePlayerRole === "host" && phase === "connecting" && mounted) {
+      initOnlineGame();
+    }
+  }, [onlineMode, onlineRoomId, onlinePlayerRole, phase, mounted, initOnlineGame]);
 
   const isMobile = useIsMobile();
 
@@ -111,9 +149,9 @@ export default function GamePage() {
   }
 
   const humanTotal = scores.total[human.faction] ?? 0;
-  const aiTotal    = scores.total[ai.faction]    ?? 0;
-  const isMyTurn   = phase === "player" && active === "HUMAN";
-  const cardsLeft  = 2 - cardsPlayed;
+  const aiTotal = scores.total[ai.faction] ?? 0;
+  const isMyTurn = phase === "player" && active === "HUMAN";
+  const cardsLeft = 2 - cardsPlayed;
 
   return (
     /*
@@ -161,14 +199,35 @@ export default function GamePage() {
           <div className={["text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5",
             isMyTurn ? "bg-emerald-500/15 text-emerald-400" : "bg-blue-500/15 text-blue-400",
           ].join(" ")}>
-            {isMyTurn ? "🎮 เทิร์นคุณ" : (
-              <motion.span
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                {turn < 5 ? "🤖 AI กำลังวางหมาก..." : turn < 15 ? "🤔 AI กำลังคำนวณแผน..." : "💭 AI กำลังเร่งปิดเกม..."}
-              </motion.span>
-            )}
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] opacity-70 font-black tracking-widest mb-0.5">
+                {onlineMode
+                  ? (onlinePlayerRole?.includes("player1") || onlinePlayerRole === "host" ? `🏆 ผู้เล่น 1 (HOST)` : `⚔️ ผู้เล่น 2 (GUEST)`)
+                  : "🕹️ โหมดเล่นคนเดียว"
+                }
+              </span>
+
+              {/* Added Transparency: Internal States */}
+              {onlineMode && (
+                <div className="flex gap-2 text-[8px] font-black uppercase opacity-60 mb-1">
+                  <span className="px-1 bg-slate-800 rounded">Role: {onlinePlayerRole}</span>
+                  <span className="px-1 bg-slate-800 rounded">Room Turn: {onlineRoomData?.turn || "..."}</span>
+                  <span className="px-1 bg-slate-800 rounded">UI State: {active}</span>
+                </div>
+              )}
+
+              {isMyTurn ? "🎮 เทิร์นคุณ" : (
+                <motion.span
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  {onlineMode
+                    ? (onlineRoomData?.gameState ? "⌛ ถึงตาคู่แข่ง..." : "⏳ กำลังซิงค์ข้อมูล...")
+                    : (turn < 5 ? "🤖 AI กำลังวางหมาก..." : turn < 15 ? "🤔 AI กำลังคำนวณแผน..." : "💭 AI กำลังเร่งปิดเกม...")
+                  }
+                </motion.span>
+              )}
+            </div>
           </div>
         </div>
 
