@@ -4,7 +4,7 @@ export type Faction = "RAMA" | "LANKA";
 
 export type Coord = { r: number; c: number };
 
-export type StatusEffect = "damage" | "protected" | "buff" | "willDie";
+export type StatusEffect = "damage" | "protected" | "buff" | "willDie" | "hasEscaped";
 
 export type Tile =
   | { kind: "empty" }
@@ -80,12 +80,14 @@ export type Move =
       faction: Faction;
       at: Coord;
       fromCardId: string;
+      targets?: Coord[];
     }
   | {
       kind: "skillDestroyWeakGroup";
       caster: Faction;
       targetAnyCellInEnemyGroup: Coord;
       fromCardId: string;
+      targets?: Coord[];
     }
   | {
       kind: "skillBlockTile";
@@ -93,6 +95,7 @@ export type Move =
       at: Coord;
       durationTurns: number;
       fromCardId: string;
+      targets?: Coord[];
     }
   | {
       kind: "skillPushUnit";
@@ -100,6 +103,7 @@ export type Move =
       from: Coord;
       dir: "up" | "down" | "left" | "right";
       fromCardId: string;
+      targets?: Coord[];
     }
   | {
       kind: "skillStormCut";
@@ -107,8 +111,15 @@ export type Move =
       center: Coord;
       radius: 1 | 2;
       fromCardId: string;
+      targets?: Coord[];
     }
-  | { kind: "pass" };
+  | {
+      kind: "skillUniversal";
+      caster: Faction;
+      fromCardId: string;
+      targets: Coord[];
+    }
+  | { kind: "pass"; targets?: Coord[] };
 
 export type CaptureEvent = {
   factionCaptured: Faction;

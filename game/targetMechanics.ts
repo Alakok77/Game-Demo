@@ -4,6 +4,7 @@ import { inBounds } from "@/game/logic";
 
 export type TargetDef = {
   maxSteps: number;
+  hint?: string;
   validateTarget?: (board: Board, cell: Coord, faction: Faction, step: number, selectedCoords: Coord[]) => boolean;
   onConfirm: (board: Board, selectedCoords: Coord[], faction: Faction) => Board | void; 
 };
@@ -21,6 +22,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
     // step 1: placement of the card itself (always assumed empty tile for units)
     // step 2: choose adjacent enemy
     maxSteps: 2, 
+    hint: "เลือกตัวศัตรูที่อยู่ติดกัน",
     validateTarget: (board, cell, faction, step, selected) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -33,6 +35,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "adjacent_empty": {
     maxSteps: 2,
+    hint: "เลือกช่องว่างที่อยู่ติดกัน",
     validateTarget: (board, cell, faction, step, selected) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -45,6 +48,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "weak_enemy": {
     maxSteps: 2,
+    hint: "เลือกศัตรูที่กำลังจะตาย",
     validateTarget: (board, cell, faction, step) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -54,6 +58,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "row": {
     maxSteps: 2, // 1: placement, 2: choose row (by clicking any cell in it)
+    hint: "เลือกแถวที่ต้องการ",
     validateTarget: (board, cell, faction, step) => {
       if (step === 1) return board[cell.r]?.[cell.c]?.kind === "empty";
       return true; // any cell specifies its row
@@ -69,6 +74,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "two_allies": {
     maxSteps: 3, // 1: placement, 2: first friend, 3: second friend
+    hint: "เลือกพันธมิตร 2 ตัว",
     validateTarget: (board, cell, faction, step) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -77,6 +83,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "two_adjacent_units": {
     maxSteps: 3, // 1: placement, 2: first unit, 3: adjacent second unit
+    hint: "เลือกยูนิต 2 ตัวที่ติดกัน",
     validateTarget: (board, cell, faction, step, selected) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -87,6 +94,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "empty_near_block": {
     maxSteps: 2,
+    hint: "เลือกช่องว่างใกล้กำแพง",
     validateTarget: (board, cell, faction, step) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -107,6 +115,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "enemy_unit": {
     maxSteps: 2, 
+    hint: "เลือกยูนิตศัตรูบนกระดาน",
     validateTarget: (board, cell, faction, step) => {
       const t = board[cell.r]?.[cell.c];
       if (step === 1) return t?.kind === "empty";
@@ -116,6 +125,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "self": {
     maxSteps: 2, // 1: placement, 2: click itself
+    hint: "คลิกที่ตัวเองเพื่อเริ่มผล",
     validateTarget: (board, cell, faction, step, selected) => {
       if (step === 1) return board[cell.r]?.[cell.c]?.kind === "empty";
       if (step === 2) return cell.r === selected[0].r && cell.c === selected[0].c;
@@ -124,6 +134,7 @@ const SELECTABLE_TARGETS_MAP: Record<string, Omit<TargetDef, "onConfirm">> = {
   },
   "area_3x3": {
     maxSteps: 1, // Skip placement click if it's a skill
+    hint: "เลือกพื้นที่ 3x3",
     validateTarget: (board, cell) => {
       return true; // anywhere
     }
@@ -134,13 +145,16 @@ export function getTargetDef(templateId: string): TargetDef | undefined {
   const tpl = CARD_LIBRARY.find(c => c.templateId === templateId);
   if (!tpl || !tpl.ability) return undefined;
   
+  // Only trigger manual selection UI if explicitly required by the data.
+  // Most cards use automatic target finding in applyCardEffect.
   if (tpl.ability.requiresTarget) {
     const selectable = tpl.ability.selectableTargets;
     if (selectable && SELECTABLE_TARGETS_MAP[selectable]) {
       const base = SELECTABLE_TARGETS_MAP[selectable];
       return {
         ...base,
-        onConfirm: () => {} // Logic handled inside gameStore applyEffect for now
+        hint: (base as any).hint,
+        onConfirm: () => {} 
       };
     }
     // Default fallback

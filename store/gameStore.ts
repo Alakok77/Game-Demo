@@ -88,12 +88,26 @@ type Actions = {
  * Ensures a PlayerState has all required arrays (prevents Firebase undefined issues).
  */
 function normalizePlayerState(ps: any): PlayerState {
-  if (!ps) return ps;
+  if (!ps) return {
+    faction: "RAMA",
+    hand: [],
+    deck: [],
+    discard: [],
+    energy: 2,
+    captures: 0,
+    passedLastTurn: false,
+    mulliganUsed: false,
+  };
   return {
     ...ps,
+    faction: ps.faction || "RAMA",
     hand: ps.hand || [],
     deck: ps.deck || [],
     discard: ps.discard || [],
+    energy: typeof ps.energy === "number" ? ps.energy : 2,
+    captures: typeof ps.captures === "number" ? ps.captures : 0,
+    passedLastTurn: !!ps.passedLastTurn,
+    mulliganUsed: !!ps.mulliganUsed,
   };
 }
 
@@ -103,15 +117,40 @@ function normalizePlayerState(ps: any): PlayerState {
 export function normalizeState(state: any): GameState {
   if (!state) return state;
   const s = { ...state };
+  s.boardSize = s.boardSize || 7;
+  s.board = s.board || makeEmptyBoard(s.boardSize);
+  s.turn = s.turn || 0;
+  s.phase = s.phase || "menu";
+  s.active = s.active || "HUMAN";
   s.boardStateHistory = s.boardStateHistory || [];
   s.activeSynergies = s.activeSynergies || [];
+  s.territoryMap = s.territoryMap || emptyTerritoryMap(s.boardSize);
+  
+  s.scores = {
+    territory: { RAMA: 0, LANKA: 0, ...(s.scores?.territory || {}) },
+    captures: { RAMA: 0, LANKA: 0, ...(s.scores?.captures || {}) },
+    bonus: { RAMA: 0, LANKA: 0, ...(s.scores?.bonus || {}) },
+    total: { RAMA: 0, LANKA: 0, ...(s.scores?.total || {}) },
+  };
+
   s.lastCaptures = (s.lastCaptures || []).map((e: any) => ({
-    ...e,
+    factionCaptured: e.factionCaptured || "RAMA",
     stonesRemoved: e.stonesRemoved || [],
   }));
+
   s.human = normalizePlayerState(s.human);
   s.ai = normalizePlayerState(s.ai);
+
+  s.turnEnergyBonus = {
+    HUMAN: { captureAwarded: false, territoryAwards: 0, ...(s.turnEnergyBonus?.HUMAN || {}) },
+    AI: { captureAwarded: false, territoryAwards: 0, ...(s.turnEnergyBonus?.AI || {}) },
+  };
+
   s.comboState = {
+    comboCount: 0,
+    energyGranted: 0,
+    totalCombosThisGame: 0,
+    strongerSkillActive: false,
     ...(s.comboState || {}),
     playedTemplateIds: s.comboState?.playedTemplateIds || [],
     playedCardTypes: s.comboState?.playedCardTypes || [],
@@ -122,6 +161,9 @@ export function normalizeState(state: any): GameState {
   } else if (!s.cardMap) {
     s.cardMap = new Map();
   }
+  
+  s.onlineMode = !!s.onlineMode;
+  s.onlineUserId = s.onlineUserId || "missing_user";
   
   return s as GameState;
 }
@@ -433,29 +475,57 @@ export function clonePlayerState(ps: PlayerState): PlayerState {
 }
 
 export function makeUndoSnapshot(state: GameState): NonNullable<GameState["undoSnapshot"]> {
+  const safeScores = state.scores || {
+    territory: { RAMA: 0, LANKA: 0 },
+    captures: { RAMA: 0, LANKA: 0 },
+    bonus: { RAMA: 0, LANKA: 0 },
+    total: { RAMA: 0, LANKA: 0 },
+  };
+  const safeEnergyBonus = state.turnEnergyBonus || {
+    HUMAN: { captureAwarded: false, territoryAwards: 0 },
+    AI: { captureAwarded: false, territoryAwards: 0 },
+  };
+  const safeCombo = state.comboState || {
+    comboCount: 0,
+    energyGranted: 0,
+    totalCombosThisGame: 0,
+    strongerSkillActive: false,
+    playedTemplateIds: [],
+    playedCardTypes: [],
+  };
+
   return {
     board: cloneBoard(state.board),
     human: clonePlayerState(state.human),
     ai: clonePlayerState(state.ai),
-    territoryMap: state.territoryMap.map((r) => [...r]),
+    territoryMap: (state.territoryMap || []).map((r) => (r ? [...r] : [])),
     scores: {
-      territory: { ...state.scores.territory },
-      captures: { ...state.scores.captures },
-      bonus: { ...state.scores.bonus },
-      total: { ...state.scores.total },
+      territory: { ...safeScores.territory },
+      captures: { ...safeScores.captures },
+      bonus: { ...safeScores.bonus },
+      total: { ...safeScores.total },
     },
-    lastCaptures: (state.lastCaptures || []).map((e) => ({ ...e, stonesRemoved: (e.stonesRemoved || []).map((p) => ({ ...p })) })),
+    lastCaptures: (state.lastCaptures || []).map((e) => ({ 
+      factionCaptured: e.factionCaptured || "RAMA", 
+      stonesRemoved: (e.stonesRemoved || []).map((p) => ({ ...p })) 
+    })),
     lastMove: state.lastMove ? { ...state.lastMove } : undefined,
-    cardsPlayedThisTurn: state.cardsPlayedThisTurn,
+    cardsPlayedThisTurn: state.cardsPlayedThisTurn || 0,
     selectedCardId: state.selectedCardId,
     hoverCell: state.hoverCell ? { ...state.hoverCell } : undefined,
     turnEnergyBonus: {
-      HUMAN: { ...state.turnEnergyBonus.HUMAN },
-      AI: { ...state.turnEnergyBonus.AI },
+      HUMAN: { ...safeEnergyBonus.HUMAN },
+      AI: { ...safeEnergyBonus.AI },
     },
     activeSynergies: [...(state.activeSynergies || [])],
-    comboState: { ...state.comboState, playedTemplateIds: [...(state.comboState.playedTemplateIds || [])], playedCardTypes: [...(state.comboState.playedCardTypes || [])] },
-    cardMap: state.cardMap instanceof Map ? new Map(state.cardMap) : new Map(Object.entries(state.cardMap as Record<string, import("@/game/synergy").CellCardInfo>)),
+    comboState: { 
+      ...safeCombo, 
+      playedTemplateIds: [...(safeCombo.playedTemplateIds || [])], 
+      playedCardTypes: [...(safeCombo.playedCardTypes || [])] 
+    },
+    cardMap: state.cardMap instanceof Map 
+      ? new Map(state.cardMap) 
+      : new Map(Object.entries((state.cardMap || {}) as Record<string, import("@/game/synergy").CellCardInfo>)),
   };
 }
 
@@ -645,8 +715,8 @@ function computeSuggestion(state: GameState): { at?: Coord; text?: string } {
 
 function applyMove(state: GameState, move: Move): GameState {
   let board = normalizeEphemeralTiles(state.board, state.turn);
-  let human = { ...state.human };
-  let ai = { ...state.ai };
+  let human = { ...state.human, hand: [...(state.human.hand || [])] };
+  let ai = { ...state.ai, hand: [...(state.ai.hand || [])] };
   const active: Player = state.active;
   const activePS = active === "HUMAN" ? human : ai;
   const faction = activePS.faction;
@@ -669,6 +739,12 @@ function applyMove(state: GameState, move: Move): GameState {
 
   let lastCaptures: GameState["lastCaptures"] = [];
 
+  const handleAbility = (board: Board, tid: string, at: Coord): Board => {
+    const res = applyCardEffect(board, tid, [at], faction, state.turn);
+    activePS.captures += res.captureCount;
+    return res.board;
+  };
+
   if (move.kind === "pass") {
     activePS.passedLastTurn = true;
   } else {
@@ -690,6 +766,12 @@ function applyMove(state: GameState, move: Move): GameState {
     const legal = isSuicideUnlessCapture(board, move.at, faction);
     if (!legal.ok) return state;
     board = placeUnit(board, move.at, faction, playedCard?.comboType);
+    
+    // Trigger ability BEFORE capture sweep
+    if (playedCard) {
+      board = handleAbility(board, playedCard.comboType || playedCard.id, move.at);
+    }
+
     const after = applyCapturesAfterPlacement(board, move.at, faction);
     board = after.board;
     lastCaptures = applyCaptured(after.captured);
@@ -697,106 +779,21 @@ function applyMove(state: GameState, move: Move): GameState {
     discardCard(move.fromCardId);
   }
 
-  if (move.kind === "skillBlockTile") {
-    if (!inBounds(board, move.at)) return state;
-    if (board[move.at.r]![move.at.c]!.kind !== "empty") return state;
-    if (activePS.energy < cardCost(activePS.hand, move.fromCardId)) return state;
-    board = cloneBoard(board);
-    board[move.at.r]![move.at.c] = {
-      kind: "block",
-      expiresAtTurn: state.turn + move.durationTurns,
-      owner: faction,
-    };
-    activePS.energy -= cardCost(activePS.hand, move.fromCardId);
-    discardCard(move.fromCardId);
+  // Unified Skill Handling: Use handleAbility for all special skills
+  const skillKinds = ["skillBlockTile", "skillDestroyWeakGroup", "skillPushUnit", "skillStormCut", "skillUniversal", "skill"];
+  if (skillKinds.includes(move.kind)) {
+     const playedCard = activePS.hand.find(c => c.id === (move as any).fromCardId);
+     if (playedCard) {
+        if (activePS.energy < playedCard.cost) return state;
+        const at = (move as any).at || (move as any).center || (move as any).from || (move as any).targetAnyCellInEnemyGroup;
+        if (at) board = handleAbility(board, playedCard.comboType || playedCard.id, at);
+        activePS.energy -= playedCard.cost;
+        discardCard(playedCard.id);
+     }
   }
 
-  if (move.kind === "skillDestroyWeakGroup") {
+  if (move.kind === "skillUniversal") {
     if (activePS.energy < cardCost(activePS.hand, move.fromCardId)) return state;
-    const target = move.targetAnyCellInEnemyGroup;
-    if (!inBounds(board, target)) return state;
-    const t = board[target.r]![target.c]!;
-    if (t.kind !== "unit" || t.faction === faction) return state;
-    const g = getGroup(board, target);
-    const libs = getLiberties(board, g).length;
-    if (libs > 2) return state;
-    board = removeGroup(board, g);
-    lastCaptures = applyCaptured([{ factionCaptured: t.faction, stonesRemoved: g }]);
-    activePS.energy -= cardCost(activePS.hand, move.fromCardId);
-    discardCard(move.fromCardId);
-  }
-
-  if (move.kind === "skillPushUnit") {
-    if (activePS.energy < cardCost(activePS.hand, move.fromCardId)) return state;
-    const from = move.from;
-    if (!inBounds(board, from)) return state;
-    const t = board[from.r]![from.c]!;
-    if (t.kind !== "unit" || t.faction === faction) return state;
-    const delta = move.dir === "up" ? { r: -1, c: 0 } : move.dir === "down" ? { r: 1, c: 0 } : move.dir === "left" ? { r: 0, c: -1 } : { r: 0, c: 1 };
-    const to = { r: from.r + delta.r, c: from.c + delta.c };
-    if (!inBounds(board, to)) return state;
-    if (board[to.r]![to.c]!.kind !== "empty") return state;
-    const next = cloneBoard(board);
-    next[to.r]![to.c] = { kind: "unit", faction: t.faction };
-    next[from.r]![from.c] = { kind: "empty" };
-    // If push causes the moved unit to have no liberties, it will be captured immediately (Go-like resolution).
-    const movedGroup = getGroup(next, to);
-    const libs = getLiberties(next, movedGroup).length;
-    board = next;
-    if (libs === 0) {
-      board = removeGroup(board, movedGroup);
-      lastCaptures = applyCaptured([{ factionCaptured: t.faction, stonesRemoved: movedGroup }]);
-    }
-    activePS.energy -= cardCost(activePS.hand, move.fromCardId);
-    discardCard(move.fromCardId);
-  }
-
-  if (move.kind === "skillStormCut") {
-    if (activePS.energy < cardCost(activePS.hand, move.fromCardId)) return state;
-    const { center, radius } = move;
-    if (!inBounds(board, center)) return state;
-    const next = cloneBoard(board);
-    const removed: Coord[] = [];
-    for (let dr = -radius; dr <= radius; dr++) {
-      for (let dc = -radius; dc <= radius; dc++) {
-        const p = { r: center.r + dr, c: center.c + dc };
-        if (!inBounds(next, p)) continue;
-        const t = next[p.r]![p.c]!;
-        if (t.kind === "unit") {
-          next[p.r]![p.c] = { kind: "empty" };
-          removed.push(p);
-        }
-      }
-    }
-    // After clearing, resolve any newly captured adjacent groups by checking all stones near the cleared area.
-    board = next;
-    const capturedEvents: { factionCaptured: Faction; stonesRemoved: Coord[] }[] = [];
-    const seenGroups = new Set<string>();
-    for (const p of removed) {
-      for (const n of [
-        p,
-        { r: p.r - 1, c: p.c },
-        { r: p.r + 1, c: p.c },
-        { r: p.r, c: p.c - 1 },
-        { r: p.r, c: p.c + 1 },
-      ]) {
-        if (!inBounds(board, n)) continue;
-        const t = board[n.r]![n.c]!;
-        if (t.kind !== "unit") continue;
-        const g = getGroup(board, n);
-        const sig = g
-          .map((q) => `${q.r},${q.c}`)
-          .sort()
-          .join("|");
-        if (seenGroups.has(sig)) continue;
-        seenGroups.add(sig);
-        if (getLiberties(board, g).length === 0) {
-          board = removeGroup(board, g);
-          capturedEvents.push({ factionCaptured: t.faction, stonesRemoved: g });
-        }
-      }
-    }
-    lastCaptures = applyCaptured(capturedEvents);
     activePS.energy -= cardCost(activePS.hand, move.fromCardId);
     discardCard(move.fromCardId);
   }
@@ -1159,27 +1156,24 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           else if (move.kind === "skillPushUnit") coords = [move.from];
           else if (move.kind === "skillStormCut") coords = [move.center];
 
-          // Re-apply the effect (matches player's logic in tryPlayAt)
-          after.board = applyCardEffect(after.board, templateId, coords, after.ai.faction);
-          
-          // Re-sync all calculated state after board changed
-          const rec = recompute(after.board, after.human, after.ai);
-          after.scores = rec.scores;
-          after.territoryMap = rec.territoryMap;
-          after.cardMap = buildCardMap(after.board, after.human, after.ai, after.cardMap);
-          after.activeSynergies = recomputeSynergies(after.board, after.cardMap, after.territoryMap);
+        // Re-sync all calculated state after board changed (applyMove already handled handleAbility)
+        const rec = recompute(after.board, after.human, after.ai);
+        after.scores = rec.scores;
+        after.territoryMap = rec.territoryMap;
+        after.cardMap = buildCardMap(after.board, after.human, after.ai, after.cardMap);
+        after.activeSynergies = recomputeSynergies(after.board, after.cardMap, after.territoryMap);
 
-          // Show active effect banner for AI
-          if (playedCard.ability) {
-             after.activeEffect = {
-               cardName: playedCard.name,
-               icon: playedCard.icon || "",
-               type: playedCard.type,
-               action: playedCard.ability.action,
-               result: playedCard.ability.result,
-             };
-          }
+        // Show active effect banner for AI
+        if (playedCard && playedCard.ability) {
+           after.activeEffect = {
+             cardName: playedCard.name,
+             icon: playedCard.icon || "",
+             type: playedCard.type,
+             action: playedCard.ability.action,
+             result: playedCard.ability.result,
+           };
         }
+      }
 
         after = endTurnIfNeeded(after);
         if (after.phase === "gameOver") return set(() => ({ ...after, aiAnnounce: undefined }));
@@ -1283,165 +1277,89 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
 
     dismissMessage: () => set((s) => ({ ...s, message: undefined })),
 
-    tryPlayAt: (cell) => {
+    tryPlayAt: (cell: Coord) => {
       const s = get();
+      if (s.phase !== "player" || s.active !== "HUMAN") return;
       
-      const canProceed = s.phase === "player" && s.active === "HUMAN";
-      if (!canProceed) {
-        if (s.onlineMode) console.warn("NOT YOUR TURN", { role: s.onlinePlayerRole, active: s.active });
-        return;
-      }
-
-      if (s.onlineMode && s.onlineRoomId) {
-        if (!s.onlineUserId) {
-          console.error("NO USER ID");
-          return;
-        }
-        console.log("TRY PLAY AT", { cell, role: s.onlinePlayerRole });
-        const actingPlayer = s.human; // Use s.human because it's swapped in syncFromOnline
-        const selected = s.selectedCardId ? actingPlayer.hand.find((c) => c.id === s.selectedCardId) : undefined;
-        
-        if (!selected) return set((st) => ({ ...st, message: setMessage("กรุณาเลือกการ์ดก่อน", "warn") }));
-        if (actingPlayer.energy < selected.cost) return set((st) => ({ ...st, message: setMessage("พลังงานไม่พอ", "warn") }));
-        if (s.cardsPlayedThisTurn >= 2) return set((st) => ({ ...st, message: setMessage("เล่นได้สูงสุด 2 ใบ", "warn") }));
-
-        performOnlineAction(s.onlineRoomId!, s.onlineUserId, {
-          kind: "move",
-          move: { kind: "playUnit", faction: actingPlayer.faction, at: cell, fromCardId: selected.id } as Move
-        });
-        return;
-      }
-
       const ps = s.human;
       const selected = s.selectedCardId ? ps.hand.find((c) => c.id === s.selectedCardId) : undefined;
       if (!selected) return set((st) => ({ ...st, message: setMessage("กรุณาเลือกการ์ดก่อน", "warn") }));
-      if (ps.energy < selected.cost) return set((st) => ({ ...st, message: setMessage("พลังงานไม่พอสำหรับการ์ดใบนี้", "warn") }));
-      if (s.cardsPlayedThisTurn >= 2) return set((st) => ({ ...st, message: setMessage("เทิร์นนี้เล่นการ์ดได้สูงสุด 2 ใบ", "warn") }));
+      if (ps.energy < selected.cost) return set((st) => ({ ...st, message: setMessage("พลังงานไม่พอ", "warn") }));
+      if (s.cardsPlayedThisTurn >= 2) return set((st) => ({ ...st, message: setMessage("เล่นได้สูงสุด 2 ใบ", "warn") }));
 
+      const targetDef = getTargetDef(selected.comboType ?? selected.id);
+      if (targetDef && targetDef.maxSteps > 0) {
+        // Multi-target skill or unit (rare)
+        const snapshot = makeUndoSnapshot(s);
+        return set({
+           targetSelection: {
+             cardId: selected.id,
+             templateId: selected.comboType ?? selected.id,
+             step: 1,
+             maxSteps: targetDef.maxSteps,
+             selectedCoords: [cell],
+             validTargets: [] 
+           },
+           undoSnapshot: snapshot,
+           message: setMessage(targetDef.hint || "เลือกเป้าหมาย")
+        });
+      }
+
+      // Immediate move (Unit or Single-Target Skill)
+      let move: Move;
       if (selected.type === "unit") {
         const tile = s.board[cell.r]?.[cell.c];
-        if (!tile) return;
+        if (!tile || tile.kind === "unit") return;
         const canJumpBlock = canPlaceOnBlockedTile(selected);
-        if (tile.kind === "unit") return set((st) => ({ ...st, message: setMessage("ช่องนี้มีตัวอยู่แล้ว", "warn") }));
-        if (tile.kind === "block" && !canJumpBlock) return set((st) => ({ ...st, message: setMessage("ช่องนี้ถูกปิดอยู่", "warn") }));
-        const boardForPlacement = tile.kind === "block" && canJumpBlock ? cloneBoard(s.board) : s.board;
-        if (tile.kind === "block" && canJumpBlock) boardForPlacement[cell.r]![cell.c] = { kind: "empty" };
-        const legal = isSuicideUnlessCapture(boardForPlacement, cell, ps.faction);
-        if (!legal.ok) return set((st) => ({ ...st, message: setMessage("ตำแหน่งนี้วางไม่ได้", "warn") }));
-        const snapshot = makeUndoSnapshot(s);
-        let next = applyMove(s, { kind: "playUnit", faction: ps.faction, at: cell, fromCardId: selected.id });
-
-        // ── Synergy: update cardMap and recompute synergy cells ──
-        const newCardMap = buildCardMap(next.board, next.human, next.ai, s.cardMap, cell, selected);
-        const newSynergies = recomputeSynergies(next.board, newCardMap, next.territoryMap);
-
-        // ── Combo: track sequence and evaluate ──
-        const newComboState: ComboState = {
-          ...s.comboState,
-          playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
-          playedCardTypes: [...s.comboState.playedCardTypes, "unit"],
-        };
-        const comboResult = evaluateCombo(newComboState);
-        let comboFeedback: ComboFeedback | undefined;
-        if (comboResult) {
-          newComboState.comboCount = s.comboState.comboCount + 1;
-          newComboState.totalCombosThisGame = (s.comboState.totalCombosThisGame ?? 0) + 1;
-          if (comboResult.energyBonus > 0) {
-            next = { ...next, human: { ...next.human, energy: Math.min(10, next.human.energy + comboResult.energyBonus) } };
-            newComboState.energyGranted = s.comboState.energyGranted + comboResult.energyBonus;
-          }
-          if (comboResult.strongerSkill) newComboState.strongerSkillActive = true;
-          comboFeedback = { kind: comboResult.kind, label: comboResult.label, nonce: Date.now() + Math.random() };
-        }
-
-        next = {
-          ...next,
-          cardsPlayedThisTurn: next.cardsPlayedThisTurn + 1,
-          selectedCardId: undefined,
-          undoSnapshot: snapshot,
-          cardMap: newCardMap,
-          activeSynergies: newSynergies,
-          comboState: newComboState,
-          comboFeedback,
-        };
-
-        // Apply ability effect immediately (instant auto-execution)
-        if (selected.ability) {
-           // Before ability, we already have 'next' from applyMove which handled placement and dismissal.
-           next.board = applyCardEffect(next.board, selected.comboType ?? selected.id, [cell], ps.faction);
-           const { scores, territoryMap } = recompute(next.board, next.human, next.ai);
-           next.scores = scores; next.territoryMap = territoryMap;
-           next.cardMap = buildCardMap(next.board, next.human, next.ai, next.cardMap);
-           next.activeSynergies = recomputeSynergies(next.board, next.cardMap, next.territoryMap);
-
-           next.message = setMessage(`✨ ${selected.name}: ${selected.ability.result}`);
-           next.activeEffect = {
-             cardName: selected.name,
-             icon: selected.icon || "",
-             type: selected.type,
-             action: selected.ability.action,
-             result: selected.ability.result,
-           };
-        }
-
-        return set(() => endTurnIfNeeded(next));
-      }
-
-      if (selected.type === "skill") {
-        const sClean = { ...s, targetSelection: undefined };
-        const snapshot = makeUndoSnapshot(s);
-
-        // Combo tracking
-        const newComboState: ComboState = {
-           ...s.comboState, 
-           playedTemplateIds: [...s.comboState.playedTemplateIds, selected.comboType ?? selected.id],
-           playedCardTypes: [...s.comboState.playedCardTypes, "skill" as const],
-        };
-        const comboResult = evaluateCombo(newComboState);
-        let comboFeedback: ComboFeedback | undefined;
-        if (comboResult) {
-           newComboState.comboCount++; 
-           newComboState.totalCombosThisGame = (newComboState.totalCombosThisGame ?? 0) + 1;
-           if (comboResult.energyBonus > 0) {
-             comboFeedback = { kind: comboResult.kind, label: comboResult.label, nonce: Date.now() + Math.random() };
-           }
-           if (comboResult.strongerSkill) newComboState.strongerSkillActive = true;
-        }
-
-        // Skill instant execution
-        const nextBoard = applyCardEffect(sClean.board, selected.comboType ?? selected.id, [cell], ps.faction); 
+        if (tile.kind === "block" && !canJumpBlock) return;
         
-        // Manual hand/energy management
-        const newHand = ps.hand.filter(c => c.id !== selected.id);
-        const newDiscard = [selected, ...ps.discard];
-        let newEnergy = ps.energy - selected.cost;
-        if (comboResult?.energyBonus) newEnergy = Math.min(10, newEnergy + comboResult.energyBonus);
+        // Check legality (Go rule)
+        const boardCopy = tile.kind === "block" ? cloneBoard(s.board).map((row, r) => row.map((tile, col) => r === cell.r && col === cell.c ? {kind:"empty"} : tile)) as Board : s.board;
+        if (!isSuicideUnlessCapture(boardCopy, cell, ps.faction).ok) return;
 
-        let next = { 
-          ...sClean, 
-          board: nextBoard,
-          human: { ...ps, hand: newHand, discard: newDiscard, energy: newEnergy }
-        };
+        move = { kind: "playUnit", faction: ps.faction, at: cell, fromCardId: selected.id };
+      } else {
+        const sk = selected.skill.kind;
+        let kind: Move["kind"] = "skillUniversal";
+        if (sk === "blockTile") kind = "skillBlockTile";
+        else if (sk === "destroyWeakGroup") kind = "skillDestroyWeakGroup";
+        else if (sk === "pushUnit") kind = "skillPushUnit";
+        else if (sk === "stormCut") kind = "skillStormCut";
 
-        const { scores, territoryMap } = recompute(next.board, next.human, next.ai);
-        next.scores = scores; next.territoryMap = territoryMap;
-        next.cardMap = buildCardMap(next.board, next.human, next.ai, next.cardMap);
-        next.activeSynergies = recomputeSynergies(next.board, next.cardMap, next.territoryMap);
-
-        if (selected.ability) {
-           next.message = setMessage(`✨ ${selected.name}: ${selected.ability.result}`);
-           next.activeEffect = {
-             cardName: selected.name, icon: selected.icon || "", type: selected.type,
-             action: selected.ability.action, result: selected.ability.result,
-           };
-        }
-        next.cardsPlayedThisTurn += 1;
-        next.selectedCardId = undefined;
-        next.undoSnapshot = snapshot;
-        next.comboState = newComboState;
-        next.comboFeedback = comboFeedback;
-        return set(() => endTurnIfNeeded(next));
+        move = { kind, faction: ps.faction, fromCardId: selected.id } as any;
+        if (kind === "skillBlockTile" || kind === "skillUniversal") (move as any).at = cell;
+        if (kind === "skillDestroyWeakGroup") (move as any).targetAnyCellInEnemyGroup = cell;
+        if (kind === "skillPushUnit") (move as any).from = cell;
+        if (kind === "skillStormCut") { (move as any).center = cell; (move as any).radius = 1; }
+        if (kind === "skillBlockTile") (move as any).durationTurns = 2;
       }
+
+      if (s.onlineMode && s.onlineRoomId) {
+        performOnlineAction(s.onlineRoomId, s.onlineUserId, { kind: "move", move });
+        set({ selectedCardId: undefined });
+        return;
+      }
+
+      // Local Mode
+      const snapshot = makeUndoSnapshot(s);
+      let next = applyMove(s, move);
+      
+      if (selected.ability) {
+        const rec = recompute(next.board, next.human, next.ai);
+        next.scores = rec.scores;
+        next.territoryMap = rec.territoryMap;
+        next.message = setMessage(`✨ ${selected.name}: ${selected.ability.result}`);
+        next.activeEffect = {
+          cardName: selected.name, icon: selected.icon || "", type: selected.type,
+          action: selected.ability.action, result: selected.ability.result
+        };
+      }
+
+      next.undoSnapshot = snapshot;
+      next.selectedCardId = undefined;
+      next.cardsPlayedThisTurn++;
+      
+      set(() => endTurnIfNeeded(next));
     },
 
     cancelTargetSelection: () => {
@@ -1469,49 +1387,54 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       
       const handCard = s.undoSnapshot?.human.hand.find(c => c.comboType === ts.templateId || c.id === ts.templateId) || s.human.hand.find(c => c.id === ts.cardId);
       
+      let kind: Move["kind"] = "playUnit";
+      if (handCard) {
+        if (handCard.type === "skill") {
+          const sk = handCard.skill.kind;
+          if (sk === "destroyWeakGroup") kind = "skillDestroyWeakGroup";
+          else if (sk === "blockTile") kind = "skillBlockTile";
+          else if (sk === "pushUnit") kind = "skillPushUnit";
+          else if (sk === "stormCut") kind = "skillStormCut";
+          else kind = "skillUniversal";
+        }
+      }
+
+      const move: any = { 
+        kind, 
+        faction: s.human.faction, 
+        fromCardId: ts.cardId,
+        targets: ts.selectedCoords 
+      };
+
+      // Map specific fields for backwards compatibility/types
+      if (kind === "playUnit") move.at = ts.selectedCoords[0];
+      if (kind === "skillUniversal" || kind === "skillBlockTile") move.at = ts.selectedCoords[0];
+      if (kind === "skillBlockTile") { move.at = ts.selectedCoords[0]; move.durationTurns = 2; }
+      if (kind === "skillDestroyWeakGroup") move.targetAnyCellInEnemyGroup = ts.selectedCoords[1] || ts.selectedCoords[0];
+      if (kind === "skillPushUnit") {
+         move.from = ts.selectedCoords[1] || ts.selectedCoords[0];
+         move.dir = "up"; // Default direction if not calculated
+      }
+      if (kind === "skillStormCut") { move.center = ts.selectedCoords[1] || ts.selectedCoords[0]; move.radius = 1; }
+
       // ONLINE MODE: Call performOnlineAction instead of local logic
       if (s.onlineMode && s.onlineRoomId && s.onlineUserId) {
-         // Determine which move kind to send based on template/skill
-         let kind: Move["kind"] = "playUnit";
-         if (handCard?.type === "skill") {
-           const sk = handCard.skill.kind;
-           if (sk === "destroyWeakGroup") kind = "skillDestroyWeakGroup";
-           else if (sk === "blockTile") kind = "skillBlockTile";
-           else if (sk === "pushUnit") kind = "skillPushUnit";
-           else if (sk === "stormCut") kind = "skillStormCut";
-         }
-
-         const move: any = { 
-           kind, 
-           faction: s.human.faction, 
-           fromCardId: ts.cardId,
-           // Inject targets into the move object
-           targets: ts.selectedCoords 
-         };
-
-         // Map specific fields expected by types.ts if necessary
-         if (kind === "playUnit") move.at = ts.selectedCoords[0];
-         if (kind === "skillBlockTile") move.at = ts.selectedCoords[0];
-         if (kind === "skillDestroyWeakGroup") move.targetAnyCellInEnemyGroup = ts.selectedCoords[0];
-         if (kind === "skillPushUnit") move.from = ts.selectedCoords[0];
-         if (kind === "skillStormCut") move.center = ts.selectedCoords[0];
-
          performOnlineAction(s.onlineRoomId, s.onlineUserId, { kind: "move", move: move as Move });
-         set({ targetSelection: undefined }); // Clear local UI state
+         set({ targetSelection: undefined, selectedCardId: undefined });
          return;
       }
 
-      // LOCAL MODE (remains unchanged)
-      const newBoard = applyCardEffect(s.board, ts.templateId, ts.selectedCoords, s.human.faction);
-      let nextState = { ...s, targetSelection: undefined, board: newBoard };
+      // LOCAL MODE (Logic now handled inside applyMove)
+      let nextState = applyMove(s, move as Move);
+      nextState.targetSelection = undefined;
       
-      const { scores, territoryMap } = recompute(newBoard, nextState.human, nextState.ai);
+      const { scores, territoryMap } = recompute(nextState.board, nextState.human, nextState.ai);
       nextState.scores = scores;
       nextState.territoryMap = territoryMap;
       
-      const newCardMap = buildCardMap(newBoard, nextState.human, nextState.ai, nextState.cardMap);
+      const newCardMap = buildCardMap(nextState.board, nextState.human, nextState.ai, nextState.cardMap);
       nextState.cardMap = newCardMap;
-      nextState.activeSynergies = recomputeSynergies(newBoard, newCardMap, territoryMap);
+      nextState.activeSynergies = recomputeSynergies(nextState.board, newCardMap, territoryMap);
 
       nextState.message = setMessage(`💥 ${handCard?.ability?.result || "อานุภาพสำแดงผล!"}`);
       if (handCard?.ability) {
@@ -1675,10 +1598,17 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         human: emptyPlayer(pf),
         ai: emptyPlayer(otherFaction(pf)),
         scores: computeScore(emptyBoard, { RAMA: 0, LANKA: 0 }).scores,
-        territoryMap: emptyTerritoryMap(BOARD_SIZE),
+        territoryMap: emptyTerritoryMap(7),
         cardsPlayedThisTurn: 0,
         selectedCardId: undefined,
         undoSnapshot: undefined,
+        cardMap: new Map(),
+        activeSynergies: [],
+        comboState: makeEmptyComboState(),
+        turnEnergyBonus: {
+           HUMAN: { captureAwarded: false, territoryAwards: 0 },
+           AI: { captureAwarded: false, territoryAwards: 0 },
+        },
         message: roomId ? setMessage("กำลังเชื่อมต่อห้อง...", "info") : undefined,
       };
     }),
@@ -1694,7 +1624,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         return {
           ...s,
           onlineMode: true,
-          onlineRoomId: s.onlineRoomId,
+          onlineRoomId: s.onlineRoomId || room.id || null, // Robust ID fallback
           onlinePlayerRole: myRole,
           active: "AI" as Player,
           phase: "connecting" as TurnPhase,
@@ -1703,15 +1633,16 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       }
 
       const snap = normalizeState(rawSnap);
+      if (!snap) return s; // Should not happen with normalizeState but safe
 
       const isGameOver = snap.phase === "gameOver";
 
       const baseUpdate: Partial<GameState> = {
         onlineMode: true,
-        onlineRoomId: s.onlineRoomId,
+        onlineRoomId: s.onlineRoomId || room.id || null,
         onlinePlayerRole: myRole,
         active: (isPlaying && isMyTurn) ? "HUMAN" : "AI" as Player,
-        phase: (isPlaying && !isMyTurn && !isGameOver) ? "aiThinking" : (snap.phase as TurnPhase),
+        phase: (isPlaying && !isMyTurn && !isGameOver) ? "aiThinking" : (snap.phase as TurnPhase || "player"),
       };
 
       // Role Swapping Logic:
@@ -1761,7 +1692,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         sInit.ai = initPlayer(guestFaction, aiRandomDeck.ids);
 
         // RANDOMIZE TURN ORDER BEFORE STARTING
-        const firstTurn: "player1" | "player2" = Math.random() > 0.5 ? "player1" : "player2";
+        const firstTurn: "player1" | "player2" = random01() > 0.5 ? "player1" : "player2";
         const firstActor: Player = (firstTurn === "player1") ? "HUMAN" : "AI";
 
         const started = startOfTurn({ ...sInit, phase: "player", active: firstActor }, firstActor);
@@ -1821,62 +1752,92 @@ export async function performOnlineAction(roomId: string, userId: string, action
     if (!room) return room;
     
     const myRole = room.player1?.id === userId ? "player1" : "player2";
-    console.log("TRANSACTION ATTEMPT", { myRole, roomTurn: room.turn, action: action.kind });
-
     if (room.turn !== myRole) {
       console.warn("TRANSACTION BLOCKED: NOT YOUR TURN", { myRole, roomTurn: room.turn });
       return room;
     }
 
     const rawState = room.gameState;
-    if (!rawState) {
-      console.warn("TRANSACTION BLOCKED: NO GAME STATE");
-      return room;
-    } 
+    if (!rawState) return room;
 
     const rawNormalized = normalizeState(rawState);
     const turnActor: Player = room.turn === "player1" ? "HUMAN" : "AI";
     
-    // CRITICAL: Ensure the state we are about to modify has the correct active player matching the turn
+    // CRITICAL: Ensure the state has the correct active player matching the turn
     const state: GameState = {
       ...rawNormalized,
       active: turnActor
     };
 
-    const myRoleForActor = room.player1?.id === userId ? "player1" : "player2";
-    const actor = myRoleForActor === "player1" ? "HUMAN" : "AI"; 
-    
     let nextState = { ...state };
     let shouldToggleTurn = false;
+    const actor = turnActor;
 
     if (action.kind === "move") {
-      // Apply move directly to existing state (using the synced active player)
+      const move = action.move as any;
+      const actingPS = actor === "HUMAN" ? state.human : state.ai;
+      const playedCard = actingPS.hand?.find(c => c.id === move.fromCardId);
+      
+      // Apply base move (deduct energy, placement, etc)
       nextState = applyMove(state, action.move);
 
-      // Apply card effects
-      const move = action.move;
-      if (move.kind !== "pass") {
-        const playedCard = (actor === "HUMAN" ? state.human : state.ai).hand.find(c => c.id === (move as any).fromCardId);
-        if (playedCard && playedCard.ability) {
-          const templateId = playedCard.comboType ?? playedCard.id;
-          let coords: Coord[] = [];
-          if (move.kind === "playUnit" || move.kind === "skillBlockTile") coords = [move.at];
-          else if (move.kind === "skillDestroyWeakGroup") coords = [move.targetAnyCellInEnemyGroup];
-          else if (move.kind === "skillPushUnit") coords = [move.from];
-          else if (move.kind === "skillStormCut") coords = [move.center];
-
-          nextState.board = applyCardEffect(nextState.board, templateId, coords, (actor === "HUMAN" ? nextState.human.faction : nextState.ai.faction));
-          
-          const rec = recompute(nextState.board, nextState.human, nextState.ai);
-          nextState.scores = rec.scores;
-          nextState.territoryMap = rec.territoryMap;
-          nextState.cardMap = buildCardMap(nextState.board, nextState.human, nextState.ai, nextState.cardMap);
-          nextState.activeSynergies = recomputeSynergies(nextState.board, nextState.cardMap, nextState.territoryMap);
+      if (move && move.kind !== "pass" && playedCard) {
+        const templateId = playedCard.comboType ?? playedCard.id;
+        let coords: Coord[] = move.targets || [];
+        if (coords.length === 0) {
+          const fb = move.at || move.targetAnyCellInEnemyGroup || move.from || move.center;
+          if (fb) coords = [fb];
         }
+
+        // ── Combo Logic (Online) ──
+        const isUnit = playedCard.type === "unit";
+        const newComboState: ComboState = {
+          ...nextState.comboState,
+          playedTemplateIds: [...nextState.comboState.playedTemplateIds, templateId],
+          playedCardTypes: [...nextState.comboState.playedCardTypes, isUnit ? "unit" : "skill"],
+        };
+        const comboResult = evaluateCombo(newComboState);
+        if (comboResult) {
+          newComboState.comboCount++;
+          newComboState.totalCombosThisGame++;
+          if (comboResult.energyBonus > 0) {
+            const ps = actor === "HUMAN" ? nextState.human : nextState.ai;
+            ps.energy = Math.min(10, ps.energy + comboResult.energyBonus);
+            newComboState.energyGranted += comboResult.energyBonus;
+          }
+          if (comboResult.strongerSkill) newComboState.strongerSkillActive = true;
+          nextState.comboFeedback = { kind: comboResult.kind, label: comboResult.label, nonce: Date.now() + Math.random() };
+        }
+        nextState.comboState = newComboState;
+
+        // ── Ability Logic (Online) ──
+        // Abilities are now handled INSIDE applyMove for Online mode too
+        // to ensure atomic board state resolution within the transaction.
+        if (playedCard.ability) {
+
+          // Visual Feedback for both players
+          nextState.message = setMessage(`✨ ${playedCard.name}: ${playedCard.ability.result}`);
+          nextState.activeEffect = {
+            cardName: playedCard.name,
+            icon: playedCard.icon || "",
+            type: playedCard.type,
+            action: playedCard.ability.action,
+            result: playedCard.ability.result,
+          };
+        }
+
+        // ── Recompute everything after potential board changes ──
+        const rec = recompute(nextState.board, nextState.human, nextState.ai);
+        nextState.scores = rec.scores;
+        nextState.territoryMap = rec.territoryMap;
+        
+        // Use move.at to ensure the new unit is in the cardMap
+        const addedCard = isUnit ? playedCard : undefined;
+        nextState.cardMap = buildCardMap(nextState.board, nextState.human, nextState.ai, nextState.cardMap, move.at, addedCard);
+        nextState.activeSynergies = recomputeSynergies(nextState.board, nextState.cardMap, nextState.territoryMap);
       }
       nextState.cardsPlayedThisTurn++;
     } else if (action.kind === "pass") {
-      const actor = myRoleForActor === "player1" ? "HUMAN" : "AI";
       nextState = applyMove(state, { kind: "pass" });
       nextState.consecutivePasses++;
       shouldToggleTurn = true;
