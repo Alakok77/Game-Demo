@@ -162,8 +162,12 @@ export function normalizeState(state: any): GameState {
     s.cardMap = new Map();
   }
   
-  s.onlineMode = !!s.onlineMode;
   s.onlineUserId = s.onlineUserId || "missing_user";
+  
+  // Never sync transient UI fields from databases
+  s.activeEffect = undefined;
+  s.message = undefined;
+  s.comboFeedback = undefined;
   
   return s as GameState;
 }
@@ -710,7 +714,7 @@ function computeSuggestion(state: GameState): { at?: Coord; text?: string } {
       if (!best || s > best.score) best = { at, score: s, text };
     }
   }
-  return best ? { at: best.at, text: best.text } : { text: "คำแนะนำ: หากทุกจุดเสี่ยง การข้ามเทิร์นก็เป็นทางเลือกที่ดี" };
+  return best ? { at: best.at, text: best.text } : { text: "คำแนะนำ: หากทุกจุดเสี่ยง การพิจารณาข้ามเทิร์นอาจเป็นทางเลือกที่ดี" };
 }
 
 function applyMove(state: GameState, move: Move): GameState {
@@ -720,8 +724,9 @@ function applyMove(state: GameState, move: Move): GameState {
   const active: Player = state.active;
   const activePS = active === "HUMAN" ? human : ai;
   const faction = activePS.faction;
-  const activeKey: Player = active;
-  const beforeTerritoryOwned = state.scores.territory[faction];
+
+  let koPosition: Coord | null = null;
+  let consecutivePasses = state.consecutivePasses;
 
   const discardCard = (cardId: string) => {
     const idx = activePS.hand.findIndex((c) => c.id === cardId);
@@ -747,8 +752,10 @@ function applyMove(state: GameState, move: Move): GameState {
 
   if (move.kind === "pass") {
     activePS.passedLastTurn = true;
+    consecutivePasses++;
   } else {
     activePS.passedLastTurn = false;
+    consecutivePasses = 0; // Reset consecutive passes on any card play
   }
 
   if (move.kind === "playUnit") {
@@ -775,11 +782,19 @@ function applyMove(state: GameState, move: Move): GameState {
     const after = applyCapturesAfterPlacement(board, move.at, faction);
     board = after.board;
     lastCaptures = applyCaptured(after.captured);
+
+    // Ko detection: If exactly 1 stone captured AND placed unit has 1 liberty
+    if (lastCaptures.length === 1 && lastCaptures[0]!.stonesRemoved.length === 1) {
+       if (countLibertiesAt(board, move.at) === 1) {
+         koPosition = lastCaptures[0]!.stonesRemoved[0]!;
+       }
+    }
+
     activePS.energy -= cardCost(activePS.hand, move.fromCardId);
     discardCard(move.fromCardId);
   }
 
-  // Unified Skill Handling: Use handleAbility for all special skills
+  // Unified Skill Handling
   const skillKinds = ["skillBlockTile", "skillDestroyWeakGroup", "skillPushUnit", "skillStormCut", "skillUniversal", "skill"];
   if (skillKinds.includes(move.kind)) {
      const playedCard = activePS.hand.find(c => c.id === (move as any).fromCardId);
@@ -792,43 +807,8 @@ function applyMove(state: GameState, move: Move): GameState {
      }
   }
 
-  if (move.kind === "skillUniversal") {
-    if (activePS.energy < cardCost(activePS.hand, move.fromCardId)) return state;
-    activePS.energy -= cardCost(activePS.hand, move.fromCardId);
-    discardCard(move.fromCardId);
-  }
-
-  // Recompute score/territory after any move.
+  // Recompute score/territory
   const recomputed = recompute(board, human, ai);
-
-  // Bonus energy: capture +1 once per turn for active player.
-  const capturedNow = lastCaptures.reduce((a, e) => a + e.stonesRemoved.length, 0);
-  const nextTurnEnergyBonus = {
-    HUMAN: { ...state.turnEnergyBonus.HUMAN },
-    AI: { ...state.turnEnergyBonus.AI },
-  };
-  if (capturedNow > 0 && !nextTurnEnergyBonus[activeKey].captureAwarded) {
-    activePS.energy = Math.min(10, activePS.energy + 1);
-    nextTurnEnergyBonus[activeKey].captureAwarded = true;
-  }
-
-  // Bonus energy: securing territory (+1, max 2 per turn).
-  const territoryDelta = Math.max(0, recomputed.scores.territory[faction] - beforeTerritoryOwned);
-  const territoryAwards = territoryDelta >= 4 ? 2 : territoryDelta > 0 ? 1 : 0;
-  const territoryBudget = Math.max(0, 2 - nextTurnEnergyBonus[activeKey].territoryAwards);
-  const territoryGain = Math.min(territoryAwards, territoryBudget);
-  if (territoryGain > 0) {
-    activePS.energy = Math.min(10, activePS.energy + territoryGain);
-    nextTurnEnergyBonus[activeKey].territoryAwards += territoryGain;
-  }
-
-  // Comeback energy: losing large group (>=3) gives +1 to the losing side.
-  const losingLargeGroup = lastCaptures.some((e) => e.stonesRemoved.length >= 3);
-  if (losingLargeGroup) {
-    const loserFaction = lastCaptures.find((e) => e.stonesRemoved.length >= 3)!.factionCaptured;
-    const loser = human.faction === loserFaction ? human : ai;
-    loser.energy = Math.min(10, loser.energy + 1);
-  }
 
   return {
     ...state,
@@ -839,7 +819,12 @@ function applyMove(state: GameState, move: Move): GameState {
     scores: recomputed.scores,
     lastCaptures,
     lastMove: move,
-    turnEnergyBonus: nextTurnEnergyBonus,
+    koPosition,
+    consecutivePasses,
+    turnEnergyBonus: {
+      HUMAN: { captureAwarded: false, territoryAwards: 0 },
+      AI: { captureAwarded: false, territoryAwards: 0 },
+    },
   };
 }
 
@@ -896,15 +881,15 @@ function endTurnIfNeeded(state: GameState): GameState {
     };
   }
 
-  // ③ Consecutive-pass lockout (4 consecutive half-turns = both sides passed twice)
-  if (state.consecutivePasses >= 4) {
+  // ③ Consecutive-pass lockout (2 consecutive passes = both sides passed once)
+  if (state.consecutivePasses >= 2) {
     return {
       ...state,
       phase: "gameOver" as const,
       selectedCardId: undefined,
       hoverCell: undefined,
-      gameOverReason: "ทั้งสองฝ่ายไม่มีที่ลง",
-      message: setMessage("ทั้งสองฝ่ายข้ามเทิร์นหลายครั้งติด — สรุปคะแนน!"),
+      gameOverReason: "ทั้งสองฝ่ายกดผ่าน",
+      message: setMessage("ทั้งสองฝ่ายข้ามเทิร์น — สรุปคะแนน!"),
     };
   }
 
@@ -954,9 +939,9 @@ function startOfTurn(state: GameState, who: Player): GameState {
     return { player: next, reshuffled: drawn.reshuffled };
   };
 
-  const leadDiff = state.scores.total[state.human.faction] - state.scores.total[state.ai.faction];
-  const humanTrailingBonus = leadDiff < -10 ? 1 : 0;
-  const aiTrailingBonus = leadDiff > 10 ? 1 : 0;
+  const leadDiff = 0; // Removed trailing bonuses as per request
+  const humanTrailingBonus = 0;
+  const aiTrailingBonus = 0;
 
   if (who === "HUMAN") {
     const { player: human, reshuffled } = bump(state.human, humanTrailingBonus);
@@ -1073,6 +1058,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       cardMap: emptyCardMap,
       tutorialStep: 0,
       consecutivePasses: 0,
+      koPosition: null,
       boardStateHistory: [],
       gameOverReason: undefined,
       // Online state defaults
@@ -1119,6 +1105,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           consecutiveCombos: cur.comboState.comboCount
         },
         lastMoveCoord: cur.lastMove && cur.lastMove.kind === "playUnit" ? `${cur.lastMove.at.r},${cur.lastMove.at.c}` : undefined,
+        koPosition: cur.koPosition,
       };
       const move = aiChooseMove(aiInput);
       let announceAt: Coord | undefined;
@@ -1147,33 +1134,24 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           consecutivePasses: aiPassed ? (after.consecutivePasses + 1) : 0,
         };
 
-        // NEW: Apply card abilities for AI if it wasn't a pass
+        // NEW: Handle additional state sync for AI moves
         if (playedCard && !aiPassed) {
-          const templateId = (playedCard as any).comboType ?? playedCard.id;
-          let coords: Coord[] = [];
-          if (move.kind === "playUnit" || move.kind === "skillBlockTile") coords = [move.at];
-          else if (move.kind === "skillDestroyWeakGroup") coords = [move.targetAnyCellInEnemyGroup];
-          else if (move.kind === "skillPushUnit") coords = [move.from];
-          else if (move.kind === "skillStormCut") coords = [move.center];
+          // 1) Synergy and Card Map update (applyMove handles board/scores/territory)
+          const newCardMap = buildCardMap(after.board, after.human, after.ai, after.cardMap);
+          after.cardMap = newCardMap;
+          after.activeSynergies = recomputeSynergies(after.board, newCardMap, after.territoryMap);
 
-        // Re-sync all calculated state after board changed (applyMove already handled handleAbility)
-        const rec = recompute(after.board, after.human, after.ai);
-        after.scores = rec.scores;
-        after.territoryMap = rec.territoryMap;
-        after.cardMap = buildCardMap(after.board, after.human, after.ai, after.cardMap);
-        after.activeSynergies = recomputeSynergies(after.board, after.cardMap, after.territoryMap);
-
-        // Show active effect banner for AI
-        if (playedCard && playedCard.ability) {
-           after.activeEffect = {
-             cardName: playedCard.name,
-             icon: playedCard.icon || "",
-             type: playedCard.type,
-             action: playedCard.ability.action,
-             result: playedCard.ability.result,
-           };
+          // 2) Visual Feedback for AI ability triggers
+          if (playedCard.ability) {
+            after.activeEffect = {
+              cardName: playedCard.name,
+              icon: playedCard.icon || "",
+              type: playedCard.type,
+              action: playedCard.ability.action,
+              result: playedCard.ability.result,
+            };
+          }
         }
-      }
 
         after = endTurnIfNeeded(after);
         if (after.phase === "gameOver") return set(() => ({ ...after, aiAnnounce: undefined }));
@@ -1251,7 +1229,12 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
         const text = hasPlayableCard(started.human)
           ? "ตาของคุณ (+2 พลังงาน) เลือกการ์ดแล้ววางบนกระดาน"
           : "พลังงานไม่พอ แต่คุณจะได้โบนัสในตาถัดไป";
-        return { ...started, message: setMessage(text) };
+        return { 
+          ...started, 
+          message: setMessage(text),
+          activeEffect: undefined,
+          comboFeedback: undefined,
+        };
       }),
     restart: () => set(() => fresh(get().playerFaction ?? "RAMA")),
 
@@ -1286,6 +1269,11 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       if (!selected) return set((st) => ({ ...st, message: setMessage("กรุณาเลือกการ์ดก่อน", "warn") }));
       if (ps.energy < selected.cost) return set((st) => ({ ...st, message: setMessage("พลังงานไม่พอ", "warn") }));
       if (s.cardsPlayedThisTurn >= 2) return set((st) => ({ ...st, message: setMessage("เล่นได้สูงสุด 2 ใบ", "warn") }));
+
+      // Ko Rule check
+      if (selected.type === "unit" && s.koPosition && cell.r === s.koPosition.r && cell.c === s.koPosition.c) {
+        return set((st) => ({ ...st, message: setMessage("ห้ามกินกลับทันทีในตำแหน่งเดิม (กฎ Ko) ต้องไปเล่นที่อื่นก่อน", "warn") }));
+      }
 
       const targetDef = getTargetDef(selected.comboType ?? selected.id);
       if (targetDef && targetDef.maxSteps > 0) {
@@ -1468,11 +1456,18 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       if (s.cardsPlayedThisTurn > 0) {
         return set((st) => ({ ...st, message: setMessage("ข้ามเทิร์นไม่ได้ เพราะคุณเล่นการ์ดแล้ว ให้กดจบเทิร์นแทน", "warn") }));
       }
+      
       let next = applyMove(s, { kind: "pass" });
-      // Count this pass towards consecutive-pass detection.
-      next = { ...next, consecutivePasses: s.consecutivePasses + 1, selectedCardId: undefined, hoverCell: undefined, undoSnapshot: undefined };
-      next = endTurnIfNeeded(next);
-      if (next.phase === "gameOver") return set(() => next);
+      next = { ...next, selectedCardId: undefined, hoverCell: undefined, undoSnapshot: undefined };
+
+      // Handle Immediate Game Over on 2 consecutive passes
+      if (next.consecutivePasses >= 2) {
+        next.phase = "gameOver";
+        next.gameOverReason = "ทั้งสองฝ่ายกดผ่าน";
+        next.message = setMessage("ทั้งสองฝ่ายข้ามเทิร์น — สรุปคะแนน!");
+        return set(() => next);
+      }
+
       set(() => next);
       runAiTurn();
     },
@@ -1494,11 +1489,10 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
       if (s.cardsPlayedThisTurn === 0) {
         return set((st) => ({ ...st, message: setMessage("หากไม่ต้องการเล่นการ์ด ให้กดข้ามเทิร์น", "info") }));
       }
-      // Card was played — reset consecutive passes.
       const next = {
         ...s,
         human: { ...s.human, passedLastTurn: false },
-        consecutivePasses: 0,
+        consecutivePasses: 0, // Reset when finishing a play turn
         selectedCardId: undefined,
         hoverCell: undefined,
         undoSnapshot: undefined,
@@ -1683,13 +1677,38 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
 
       set({ isInitializing: true });
       try {
-        const pf = s.playerFaction ?? "RAMA";
-        const hostFaction = pf;
-        const guestFaction = otherFaction(pf);
+        const roomSnap = await getDb(ref(db, `battle_rooms_v2/${s.onlineRoomId}`));
+        if (!roomSnap.exists()) throw new Error("Room not found");
+        const roomData = roomSnap.val();
         
+        const p1 = roomData.player1;
+        const p2 = roomData.player2;
+        
+        if (!p1 || !p2) throw new Error("Players not found in room");
+
+        // Faction assignment:
+        // Host always gets their preferred faction.
+        // Guest gets their preferred faction UNLESS it's the same as the host's.
+        const hostFaction = p1.faction || "RAMA";
+        let guestFaction = p2.faction || otherFaction(hostFaction);
+        
+        // If they picked the same faction, force guest to the other side for Board Logic
+        if (guestFaction === hostFaction) {
+          guestFaction = otherFaction(hostFaction);
+        }
+        
+        // Initializing game state
+        // Player 1 is ALWAYS host locally, Player 2 is ALWAYS the opponent
         const sInit = fresh(hostFaction, s.settings);
-        const aiRandomDeck = generateRandomDeck(guestFaction, CARD_LIBRARY.map(c => c.templateId), Date.now());
-        sInit.ai = initPlayer(guestFaction, aiRandomDeck.ids);
+        
+        // Setup Host (Human in local terms)
+        const hostDeck = p1.deckTemplateIds || buildDefaultDeckTemplateIds(hostFaction);
+        sInit.human = initPlayer(hostFaction, hostDeck);
+        
+        // Setup Guest (AI in local terms, but acts as opponent)
+        // We use instantiateDeck with the Guest's cards but the Guest's ASSIGNED faction
+        const guestDeckTemplateIds = p2.deckTemplateIds || buildDefaultDeckTemplateIds(guestFaction);
+        sInit.ai = initPlayer(guestFaction, guestDeckTemplateIds);
 
         // RANDOMIZE TURN ORDER BEFORE STARTING
         const firstTurn: "player1" | "player2" = random01() > 0.5 ? "player1" : "player2";
@@ -1702,7 +1721,10 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
           cardMap: serializeMap(started.cardMap),
           undoSnapshot: null,
           onlineMode: true,
-          hostId: s.onlineUserId
+          hostId: s.onlineUserId,
+          activeEffect: null, // Ensure never saved
+          message: null,
+          comboFeedback: null
         });
 
         console.log("PUSHING INITIAL GAME STATE", { firstTurn, firebaseState });
@@ -1732,11 +1754,14 @@ export const serializeMap = (map: Map<any, any> | undefined | null) => {
  * Required for Firebase compatibility as it does not allow 'undefined' in updates.
  */
 function stripUndefined(obj: any): any {
+  // Fields that should NEVER be persisted to Firebase (online state)
+  const TRANSIENT_FIELDS = ["activeEffect", "message", "comboFeedback", "undoSnapshot", "hoverCell", "tutorialStep"];
+
   if (Array.isArray(obj)) {
     return obj.map(v => stripUndefined(v));
   } else if (obj !== null && typeof obj === "object") {
     return Object.entries(obj).reduce((acc: any, [key, value]) => {
-      if (value !== undefined) {
+      if (value !== undefined && !TRANSIENT_FIELDS.includes(key)) {
         acc[key] = stripUndefined(value);
       }
       return acc;
@@ -1893,6 +1918,13 @@ export function libertiesOverlay(board: Board) {
 
 if (typeof window !== "undefined") {
   useGameStore.subscribe((state) => {
-    saveData("game_state", state);
+    // Also strip transient fields before saving to localStorage
+    const saved = { ...state };
+    delete (saved as any).activeEffect;
+    delete (saved as any).message;
+    delete (saved as any).comboFeedback;
+    delete (saved as any).undoSnapshot;
+    delete (saved as any).hoverCell;
+    saveData("game_state", saved);
   });
 }

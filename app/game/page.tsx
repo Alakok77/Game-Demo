@@ -179,72 +179,40 @@ export default function GamePage() {
     >
       {/* ══ ROW 1: HEADER (col-span-2) ═══════════════════════════════════════ */}
       <header
-        className="flex items-center gap-3 px-4 border-b border-slate-800 bg-slate-900/80 z-20"
+        className="flex items-center justify-between px-4 border-b border-slate-800 bg-slate-900/80 z-20"
         style={{ gridColumn: "1 / -1" }}
       >
-        {/* Player */}
-        <div className="flex items-center gap-2">
-          <div className={`w-2.5 h-2.5 rounded-full ${human.faction === "RAMA" ? "bg-blue-400" : "bg-red-500"}`} />
-          <div>
-            <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500 leading-none">{humanPlayerLabel(human.faction)}</div>
-            <div className={`text-xl font-black tabular-nums leading-tight ${human.faction === "RAMA" ? "text-blue-300" : "text-red-300"}`}>{humanTotal}⭐</div>
-          </div>
-        </div>
+        <div className="w-12" /> {/* Spacer for symmetry */}
 
-        {/* Centre */}
-        <div className="flex-1 flex flex-col items-center">
-          <div className={["text-[10px] font-bold uppercase tracking-widest tabular-nums",
+        {/* Centre Information: Turn and Ownership Only */}
+        <div className="flex-1 flex flex-col items-center py-1">
+          <div className={["text-xs font-black uppercase tracking-[0.2em] tabular-nums",
             turn >= 27 ? "text-red-400 animate-pulse" : turn >= 22 ? "text-amber-400" : "text-slate-500",
           ].join(" ")}>เทิร์น {turn} / 30</div>
-          <div className={["text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5",
-            isMyTurn ? "bg-emerald-500/15 text-emerald-400" : "bg-blue-500/15 text-blue-400",
+          
+          <div className={["text-[10px] font-bold px-3 py-0.5 rounded-full mt-1.5 shadow-sm border",
+            isMyTurn ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-blue-500/10 text-blue-400 border-blue-500/30",
           ].join(" ")}>
-            <div className="flex flex-col items-center">
-              <span className="text-[10px] opacity-70 font-black tracking-widest mb-0.5">
+            {isMyTurn ? "🎮 ตาของคุณ" : (
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
                 {onlineMode
-                  ? (onlinePlayerRole?.includes("player1") || onlinePlayerRole === "host" ? `🏆 ผู้เล่น 1 (HOST)` : `⚔️ ผู้เล่น 2 (GUEST)`)
-                  : "🕹️ โหมดเล่นคนเดียว"
+                  ? (onlineRoomData?.gameState ? "⌛ ตาคู่แข่ง..." : "⏳ กำลังซิงค์...")
+                  : "🤖 ตา AI..."
                 }
-              </span>
-
-              {/* Added Transparency: Internal States */}
-              {onlineMode && (
-                <div className="flex gap-2 text-[8px] font-black uppercase opacity-60 mb-1">
-                  <span className="px-1 bg-slate-800 rounded">Role: {onlinePlayerRole}</span>
-                  <span className="px-1 bg-slate-800 rounded">Room Turn: {onlineRoomData?.turn || "..."}</span>
-                  <span className="px-1 bg-slate-800 rounded">UI State: {active}</span>
-                </div>
-              )}
-
-              {isMyTurn ? "🎮 เทิร์นคุณ" : (
-                <motion.span
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                >
-                  {onlineMode
-                    ? (onlineRoomData?.gameState ? "⌛ ถึงตาคู่แข่ง..." : "⏳ กำลังซิงค์ข้อมูล...")
-                    : (turn < 5 ? "🤖 AI กำลังวางหมาก..." : turn < 15 ? "🤔 AI กำลังคำนวณแผน..." : "💭 AI กำลังเร่งปิดเกม...")
-                  }
-                </motion.span>
-              )}
-            </div>
+              </motion.span>
+            )}
           </div>
         </div>
 
-        {/* AI */}
-        <div className="flex items-center gap-2">
-          <div className="text-right">
-            <div className="text-[9px] font-bold uppercase tracking-widest text-slate-500 leading-none">{aiPlayerLabel(ai.faction)}</div>
-            <div className={`text-xl font-black tabular-nums leading-tight ${ai.faction === "LANKA" ? "text-red-400" : "text-blue-300"}`}>{aiTotal}⭐</div>
-          </div>
-          <div className={`w-2.5 h-2.5 rounded-full ${ai.faction === "LANKA" ? "bg-red-500" : "bg-blue-400"}`} />
-          <button
-            onClick={() => router.push("/menu")}
-            className="text-xs font-semibold px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-          >
-            ← Menu
-          </button>
-        </div>
+        <button
+          onClick={() => router.push("/menu")}
+          className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-400 hover:text-white transition shadow-lg shrink-0"
+        >
+          Menu
+        </button>
       </header>
 
       {/* ══ ROW 2 COL 1: BOARD ════════════════════════════════════════════════ */}

@@ -126,51 +126,46 @@ export function MobileGameLayout() {
       <EffectBar />
       {/* ══ 1. TOP BAR (COMPACT HEADER + ENERGY) ══════════════════════════════ */}
       <header className="flex flex-col bg-slate-900 border-b border-slate-800 z-20 flex-shrink-0 shadow-md">
-        {/* Row 1: Scores and Turn */}
-        <div className="flex items-center justify-between px-3 py-1.5 h-10">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${human.faction === "RAMA" ? "bg-blue-400" : "bg-red-500"}`} />
-            <div className={`text-lg font-black tabular-nums leading-none ${humanColor}`}>
-              {humanTotal}⭐
-            </div>
+        {/* Row 1: Turn, Ownership and Scores */}
+        <div className="flex items-center justify-between px-3 h-12">
+          {/* Left: Your Score */}
+          <div className="flex flex-col items-center min-w-[45px] bg-slate-950/30 rounded-lg py-0.5 px-1.5 border border-slate-800/50">
+            <span className={`text-xs font-black tabular-nums leading-none ${humanColor}`}>{humanTotal}</span>
+            <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter mt-0.5">YOU ⭐</span>
           </div>
 
           <div className="flex flex-col items-center">
-            <div className={["text-[10px] font-bold uppercase tracking-wider tabular-nums",
-              turn >= 27 ? "text-red-400 animate-pulse" : turn >= 22 ? "text-amber-400" : "text-slate-500",
+            <div className={["text-[10px] font-black uppercase tracking-[0.1em] tabular-nums",
+              turn >= 27 ? "text-red-400 animate-pulse" : turn >= 22 ? "text-amber-400" : "text-slate-400",
             ].join(" ")}>
               เทิร์น {turn}/30
             </div>
-            <div className={["text-[10px] font-semibold px-2 py-0.5 rounded-full mt-0.5 leading-none flex flex-col items-center",
-              isMyTurn ? "bg-emerald-500/20 text-emerald-400" : "bg-blue-500/20 text-blue-400",
+            <div className={["text-[9px] font-bold px-2 py-0.5 rounded-full mt-0.5 leading-none flex items-center border shadow-sm",
+              isMyTurn ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-blue-500/10 text-blue-400 border-blue-500/30",
             ].join(" ")}>
-              {onlineMode && (
-                <span className="text-[8px] opacity-80 mb-0.5 font-black uppercase">
-                  {onlinePlayerRole === "host" ? `ผู้เล่น 1 (HOST) - ${onlineUserId.slice(-4)}` : `ผู้เล่น 2 (GUEST) - ${onlineUserId.slice(-4)}`}
-                </span>
-              )}
               {isMyTurn ? "🎮 ตาคุณ" : (
                 <motion.span
                   animate={{ opacity: [0.6, 1, 0.6] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 >
                 {onlineMode 
-                  ? "⌛ ถึงตาคู่แข่ง..." 
-                  : (turn < 5 ? "🤖 AI วางหมาก..." : turn < 15 ? "🤔 AI รวมแผน..." : "💭 AI ปิดเกม...")
+                  ? "⌛ ตาคู่แข่ง..." 
+                  : "🤖 ตา AI..."
                 }
                 </motion.span>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className={`text-lg font-black tabular-nums leading-none ${aiColor}`}>
-              {aiTotal}⭐
+          {/* Right: Opponent Score + Menu */}
+          <div className="flex items-center gap-1.5 min-w-[45px] justify-end">
+            <div className="flex flex-col items-center bg-slate-950/30 rounded-lg py-0.5 px-1.5 border border-slate-800/50">
+              <span className={`text-xs font-black tabular-nums leading-none ${aiColor}`}>{aiTotal}</span>
+              <span className="text-[7px] text-slate-500 font-bold uppercase tracking-tighter mt-0.5">OPP ⭐</span>
             </div>
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ai.faction === "LANKA" ? "bg-red-500" : "bg-blue-400"}`} />
             <button
               onClick={() => router.push("/menu")}
-              className="ml-1 text-xs font-bold px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-400 active:bg-slate-700 transition"
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 active:bg-slate-700 shadow-md"
               style={{ touchAction: "manipulation" }}
             >
               ≡
@@ -305,7 +300,7 @@ export function MobileGameLayout() {
       <div
         className="flex-shrink-0 bg-slate-950 z-50"
         style={{
-          height: 165,
+          height: 185,
           paddingBottom: "env(safe-area-inset-bottom, 8px)",
         }}
       >

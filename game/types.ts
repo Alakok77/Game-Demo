@@ -245,6 +245,7 @@ export type GameState = {
   tutorialStep: number;
   /** How many consecutive passes have occurred without any card play */
   consecutivePasses: number;
+  koPosition: Coord | null;
   /** Compact board-state fingerprints for repetition detection */
   boardStateHistory: string[];
   /** Human-readable reason the game ended (displayed on result screen) */

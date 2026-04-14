@@ -83,6 +83,7 @@ export default function ResultPage() {
   const ai = useGameStore((s) => s.ai);
   const gameOverReason = useGameStore((s) => s.gameOverReason);
   const comboState = useGameStore((s) => s.comboState);
+  const onlineMode = useGameStore((s) => s.onlineMode);
 
   // Progression state
   const [expResult, setExpResult] = useState<MatchExpResult | null>(null);
@@ -114,7 +115,7 @@ export default function ResultPage() {
       territory: scores.territory[human.faction],
       comboCount: comboState?.totalCombosThisGame ?? 0,
     });
-    const coins = calcMatchCoins(winner === "win", comboState?.totalCombosThisGame ?? 0);
+    const coins = calcMatchCoins(winner, scores.total[human.faction]);
 
     const { newProfile, levelUps } = applyMatchRewards(profile, expCalc.total, coins, getRewardsForLevel);
 
@@ -144,7 +145,7 @@ export default function ResultPage() {
   }
 
   const winnerLabel =
-    winner === "win" ? "คุณชนะ! 🎉" : winner === "lose" ? "AI ชนะ 🤖" : "เสมอ 🤝";
+    winner === "win" ? "คุณชนะ! 🎉" : winner === "lose" ? (onlineMode ? "ศัตรูชนะ" : "AI ชนะ 🤖") : "เสมอ 🤝";
 
   const newProg = newProfile ? expProgress(newProfile.totalExp) : null;
   const oldProg = oldProfile ? expProgress(oldProfile.totalExp) : null;
@@ -194,18 +195,16 @@ export default function ResultPage() {
               <div className="mb-0.5 sm:mb-1 text-[10px] sm:text-xs font-semibold text-white/70 uppercase tracking-wide">{humanPlayerLabel(human.faction)}</div>
               <div className="text-2xl sm:text-3xl font-extrabold text-white leading-none">⭐ {scores.total[human.faction]}</div>
               <div className="mt-1.5 sm:mt-2 space-y-0.5 text-[10px] sm:text-xs text-slate-300">
-                <div>🗺️ <span className="hidden sm:inline">พื้นที่ของเรา:</span> {scores.territory[human.faction]}</div>
-                <div>⚔️ <span className="hidden sm:inline">ล้อมแตก:</span> {scores.captures[human.faction]}</div>
-                <div>🎁 <span className="hidden sm:inline">โบนัส:</span> {scores.bonus[human.faction]}</div>
+                <div>🗺️ <span className="hidden sm:inline">พื้นที่ที่ล้อมได้:</span> {scores.territory[human.faction]}</div>
+                <div>⚔️ <span className="hidden sm:inline">ตัวที่จับได้:</span> {scores.captures[human.faction]}</div>
               </div>
             </div>
             <div className={["rounded-2xl border p-3 sm:p-4", aiPanelShellClasses(ai.faction)].join(" ")}>
               <div className="mb-0.5 sm:mb-1 text-[10px] sm:text-xs font-semibold text-white/70 uppercase tracking-wide">{aiPlayerLabel(ai.faction)}</div>
               <div className="text-2xl sm:text-3xl font-extrabold text-white leading-none">⭐ {scores.total[ai.faction]}</div>
               <div className="mt-1.5 sm:mt-2 space-y-0.5 text-[10px] sm:text-xs text-slate-300">
-                <div>🗺️ <span className="hidden sm:inline">พื้นที่ของเรา:</span> {scores.territory[ai.faction]}</div>
-                <div>⚔️ <span className="hidden sm:inline">ล้อมแตก:</span> {scores.captures[ai.faction]}</div>
-                <div>🎁 <span className="hidden sm:inline">โบนัส:</span> {scores.bonus[ai.faction]}</div>
+                <div>🗺️ <span className="hidden sm:inline">พื้นที่ที่ล้อมได้:</span> {scores.territory[ai.faction]}</div>
+                <div>⚔️ <span className="hidden sm:inline">ตัวที่จับได้:</span> {scores.captures[ai.faction]}</div>
               </div>
             </div>
           </motion.div>

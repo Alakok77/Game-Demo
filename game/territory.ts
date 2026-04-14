@@ -111,15 +111,10 @@ export function scoreFromTerritoryAndCaptures(board: Board, territory: Territory
     }
   }
   const territoryScore = { RAMA: rama, LANKA: lanka } as Record<Faction, number>;
-  const centerBonus = centerControlBonus(board, territory);
-  const groupBonus = largestGroupBonus(board);
-  const bonus = {
-    RAMA: centerBonus.RAMA + groupBonus.RAMA,
-    LANKA: centerBonus.LANKA + groupBonus.LANKA,
-  } as Record<Faction, number>;
+  const bonus = { RAMA: 0, LANKA: 0 } as Record<Faction, number>;
   const total = {
-    RAMA: territoryScore.RAMA + captures.RAMA * 2 + bonus.RAMA,
-    LANKA: territoryScore.LANKA + captures.LANKA * 2 + bonus.LANKA,
+    RAMA: territoryScore.RAMA + captures.RAMA,
+    LANKA: territoryScore.LANKA + captures.LANKA,
   } as Record<Faction, number>;
   return { territory: territoryScore, captures, bonus, total };
 }

@@ -101,10 +101,13 @@ export function calcMatchExp(input: MatchInput): MatchExpResult {
   return { base, captureBonus, territoryBonus, comboBonus, total: base + captureBonus + territoryBonus + comboBonus };
 }
 
-export function calcMatchCoins(won: boolean, comboCount: number = 0): number {
-  const base = won ? 100 : 50;
-  const comboBonus = Math.min(100, comboCount * 20);
-  return base + comboBonus;
+export function calcMatchCoins(result: "win" | "lose" | "draw", points: number): number {
+  let base = 50;
+  if (result === "win") base = 200;
+  else if (result === "draw") base = 100;
+  
+  // 1 point = 1 coin bonus
+  return base + Math.max(0, points);
 }
 
 // ─── Default Profile ──────────────────────────────────────────────────────────

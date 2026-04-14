@@ -17,10 +17,12 @@ function factionBorder(faction: Faction) {
   return faction === "RAMA" ? "border-blue-500/50" : "border-red-500/50";
 }
 
-function costGem(cost: number, faction: Faction) {
-  const cls = "bg-gradient-to-br from-amber-400 to-orange-600 border-yellow-200 shadow-[inset_0_1px_3px_rgba(255,255,255,0.6),0_2px_6px_rgba(0,0,0,0.6)] text-white";
+function costGem(cost: number, faction: Faction, canPlay: boolean) {
+  const cls = canPlay 
+    ? "bg-gradient-to-br from-amber-400 to-orange-600 border-yellow-200 shadow-[inset_0_1px_3px_rgba(255,255,255,0.6),0_2px_6px_rgba(0,0,0,0.6)] text-white"
+    : "bg-slate-700 border-slate-600 shadow-inner text-slate-400";
   return (
-    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black z-20 ${cls}`}>
+    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-xl font-black z-20 transition-colors ${cls}`}>
       {cost}
     </div>
   );
@@ -110,7 +112,7 @@ export function MobileCardModal({
               </div>
             </div>
           </div>
-          {costGem(card.cost, faction)}
+          {costGem(card.cost, faction, canPlay)}
         </div>
 
         {/* Divider */}
@@ -143,7 +145,7 @@ export function MobileCardModal({
 
           {/* Status badge */}
           {disabled && (
-            <div className="rounded-xl bg-slate-700/50 border border-slate-600/50 px-4 py-2 text-center text-sm text-slate-400 font-semibold">
+            <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-center text-sm text-rose-300 font-semibold animate-pulse">
               🔒 พลังงานไม่พอ (ต้องการ ⚡{card.cost})
             </div>
           )}
@@ -166,7 +168,7 @@ export function MobileCardModal({
                 ? "bg-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]"
                 : canPlay
                 ? "bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.4)]"
-                : "bg-slate-700 opacity-50 cursor-not-allowed",
+                : "bg-slate-700 border border-slate-600 opacity-50 cursor-not-allowed",
             ].join(" ")}
           >
             {isSelected ? "✔ กำลังเลือกอยู่" : disabled ? "🔒 พลังงานไม่พอ" : "🎯 เลือกการ์ดนี้"}

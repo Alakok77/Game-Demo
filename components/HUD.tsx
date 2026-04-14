@@ -57,7 +57,7 @@ export function HUD() {
       ? "เสมอ"
       : scores.total[human.faction] > scores.total[ai.faction]
         ? "คุณชนะ"
-        : "AI ชนะ";
+        : (onlineMode ? "ศัตรูชนะ" : "AI ชนะ");
 
   // Don't render dynamic content until after client-side hydration.
   // The Zustand store shuffles decks with Math.random() on init, which
@@ -80,10 +80,9 @@ export function HUD() {
           <div className={["rounded-xl border p-3 transition", humanTurnPanelClasses(active === "HUMAN", human.faction)].join(" ")}>
             <div className={["text-sm font-bold", humanPanelTitleClasses(human.faction)].join(" ")}>{humanPlayerLabel(human.faction)}</div>
             <div className="mt-2 text-sm text-slate-200">
-              {human.faction === "RAMA" ? "🟦" : "🟥"} พื้นที่ของเรา: {scores.territory[human.faction]}
+              {human.faction === "RAMA" ? "🟦" : "🟥"} พื้นที่ที่ล้อมได้: {scores.territory[human.faction]}
             </div>
-            <div className="text-sm text-slate-200">⚔ ล้อมแตก: {scores.captures[human.faction]} (x2)</div>
-            <div className="text-sm text-slate-200">⭐ โบนัส: {scores.bonus[human.faction]}</div>
+            <div className="text-sm text-slate-200">⚔ ตัวที่จับได้: {scores.captures[human.faction]}</div>
             <div className={["mt-2 text-3xl font-extrabold", humanPanelScoreClasses(human.faction)].join(" ")}>⭐ {scores.total[human.faction]}</div>
           </div>
 
@@ -122,10 +121,9 @@ export function HUD() {
           <div className={["rounded-xl border p-3 transition", aiTurnPanelClasses(active === "AI", ai.faction)].join(" ")}>
             <div className={["text-sm font-bold", aiPanelTitleClasses(ai.faction)].join(" ")}>{aiPlayerLabel(ai.faction)}</div>
             <div className="mt-2 text-sm text-slate-200">
-              {ai.faction === "RAMA" ? "🟦" : "🟥"} พื้นที่ของเรา: {scores.territory[ai.faction]}
+              {ai.faction === "RAMA" ? "🟦" : "🟥"} พื้นที่ที่ล้อมได้: {scores.territory[ai.faction]}
             </div>
-            <div className="text-sm text-slate-200">⚔ ล้อมแตก: {scores.captures[ai.faction]} (x2)</div>
-            <div className="text-sm text-slate-200">⭐ โบนัส: {scores.bonus[ai.faction]}</div>
+            <div className="text-sm text-slate-200">⚔ ตัวที่จับได้: {scores.captures[ai.faction]}</div>
             <div className={["mt-2 text-3xl font-extrabold", aiPanelScoreClasses(ai.faction)].join(" ")}>⭐ {scores.total[ai.faction]}</div>
           </div>
         </div>

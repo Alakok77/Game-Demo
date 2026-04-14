@@ -51,6 +51,7 @@ export type AiInput = {
   playerPowerMetrics?: PlayerPowerMetrics;
   /** Optional: coord-string of the AI's previous move (for anti-repeat). */
   lastMoveCoord?: string;
+  koPosition?: Coord | null;
 };
 
 // ─── Internals ────────────────────────────────────────────────────────────────
@@ -433,7 +434,7 @@ export function aiChooseMove(input: AiInput): Move {
   // ── Level 1: Beginner (Heuristic with mistakes) ─────────────────────────
   // Part 10: Smart Mistakes (Instead of random, pick 3rd or 4th best)
   if (level === 1) {
-    const cands = getAllCandidates(board, unitCards, skillCards, aiFaction, humanFaction, captures, scores, weights);
+    const cands = getAllCandidates(board, unitCards, skillCards, aiFaction, humanFaction, captures, scores, weights, input.koPosition);
     if (!cands.length) return { kind: "pass" };
     cands.sort((a, b) => b.score - a.score);
     // Pick from index 3-5 if available, else best
@@ -442,7 +443,7 @@ export function aiChooseMove(input: AiInput): Move {
   }
 
   // ── Level 2 / 3 / 4: Professional to Supreme ────────────────────────────
-  const cands = getAllCandidates(board, unitCards, skillCards, aiFaction, humanFaction, captures, scores, weights);
+  const cands = getAllCandidates(board, unitCards, skillCards, aiFaction, humanFaction, captures, scores, weights, input.koPosition);
   if (!cands.length) return { kind: "pass" };
 
   cands.sort((a, b) => b.score - a.score);
@@ -503,7 +504,8 @@ function getAllCandidates(
   humanFaction: Faction,
   captures: Record<Faction, number>,
   scores: ScoreBreakdown,
-  weights: StrategyWeights
+  weights: StrategyWeights,
+  koPosition?: Coord | null
 ): { move: Move; score: number }[] {
   const cands: { move: Move; score: number }[] = [];
   const size = board.length;
@@ -516,6 +518,7 @@ function getAllCandidates(
 
   for (const card of unitCards) {
     for (const at of empties) {
+      if (koPosition && at.r === koPosition.r && at.c === koPosition.c) continue;
       const s = scoreUnitMove(board, at, aiFaction, humanFaction, captures, card, scores, weights);
       if (s !== -Infinity) cands.push({ move: { kind: "playUnit", faction: aiFaction, at, fromCardId: card.id }, score: s });
     }
