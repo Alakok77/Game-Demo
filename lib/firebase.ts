@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
@@ -11,6 +11,29 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getDatabase(app);
+// Helper to validate environment variables (prevent literal "undefined" strings)
+const isValid = (v: any) => v && v !== "undefined" && v !== "null" && v !== "";
+
+// We only attempt to initialize if we have the critical bits: Project ID and Database URL
+const isConfigValid = isValid(firebaseConfig.projectId) && isValid(firebaseConfig.databaseURL);
+const isBrowser = typeof window !== "undefined";
+
+let app = null;
+
+// Only initialize on the client-side OR if we have valid config on the server
+// Prerendering (build-time) usually has isBrowser = false and missing config
+if (isBrowser || isConfigValid) {
+  try {
+    if (getApps().length > 0) {
+      app = getApp();
+    } else if (isConfigValid) {
+      app = initializeApp(firebaseConfig);
+    }
+  } catch (err) {
+    console.error("Firebase init warning:", err);
+  }
+}
+
+// Export db instance. During build time if config is missing, this will be null.
+// Use 'as any' to satisfy Firebase's function types in gameStore.ts imports.
+export const db = app ? getDatabase(app) : (null as any);
