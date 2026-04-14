@@ -1677,6 +1677,7 @@ export const useGameStore = create<GameState & Actions>((set, get) => {
 
       set({ isInitializing: true });
       try {
+        if (!db) throw new Error("Firebase Database instance not found. Check environment variables.");
         const roomSnap = await getDb(ref(db, `battle_rooms_v2/${s.onlineRoomId}`));
         if (!roomSnap.exists()) throw new Error("Room not found");
         const roomData = roomSnap.val();
@@ -1771,6 +1772,10 @@ function stripUndefined(obj: any): any {
 }
 
 export async function performOnlineAction(roomId: string, userId: string, action: { kind: "move", move: Move } | { kind: "pass" } | { kind: "endTurn" }) {
+  if (!db) {
+    console.error("Action blocked: Firebase DB not initialized");
+    return;
+  }
   const roomRef = ref(db, `battle_rooms_v2/${roomId}`);
   
   return runTransaction(roomRef, (room) => {

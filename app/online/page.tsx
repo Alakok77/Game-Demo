@@ -56,6 +56,10 @@ export default function OnlinePage() {
   };
 
   const handleCreateRoom = async () => {
+    if (!db) {
+      setError("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (Firebase Database not found)");
+      return;
+    }
     setLoading(true);
     setError(null);
     const id = generateCode();
@@ -76,8 +80,9 @@ export default function OnlinePage() {
         turn: "player1"
       });
       setCurrentRoomId(id);
-    } catch (err) {
-      setError("ไม่สามารถสร้างห้องได้ โปรดลองอีกครั้ง");
+    } catch (err: any) {
+      console.error("CREATE ROOM ERROR:", err);
+      setError(`ไม่สามารถสร้างห้องได้: ${err.message || "โปรดลองอีกครั้ง"}`);
     } finally {
       setLoading(false);
     }
@@ -86,6 +91,10 @@ export default function OnlinePage() {
   const handleJoinRoom = async () => {
     if (!roomIdInput || roomIdInput.length < 6) {
       setError("โปรดใส่รหัสห้อง 6 หลัก");
+      return;
+    }
+    if (!db) {
+      setError("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (Firebase Database not found)");
       return;
     }
     setLoading(true);
@@ -121,8 +130,9 @@ export default function OnlinePage() {
         });
       }
       setCurrentRoomId(roomIdInput);
-    } catch (err) {
-      setError("ไม่สามารถเข้าห้องได้");
+    } catch (err: any) {
+      console.error("JOIN ROOM ERROR:", err);
+      setError(`ไม่สามารถเข้าห้องได้: ${err.message || "โปรดลองอีกครั้ง"}`);
     } finally {
       setLoading(false);
     }

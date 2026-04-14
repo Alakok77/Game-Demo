@@ -28,10 +28,18 @@ if (isBrowser || isConfigValid) {
       app = getApp();
     } else if (isConfigValid) {
       app = initializeApp(firebaseConfig);
+    } else {
+      console.error("Firebase Debug: Config invalid or missing.", {
+        hasProjectId: !!firebaseConfig.projectId,
+        hasDatabaseURL: !!firebaseConfig.databaseURL,
+        isBrowser
+      });
     }
   } catch (err) {
-    console.error("Firebase init warning:", err);
+    console.error("Firebase Init Error:", err);
   }
+} else {
+  console.warn("Firebase Skip: Not in browser and config invalid.");
 }
 
 // Export db instance. During build time if config is missing, this will be null.
